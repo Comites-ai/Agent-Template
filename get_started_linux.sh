@@ -461,13 +461,18 @@ EOF
 # Phase 9: Uncomment selected sections in terraform/main.tf
 # ==============================================================================
 
-# Uncomment a section between two ASCII heading lines. Pass the section's
-# numeric label and the file. Lines starting with `# ` inside the section
-# are turned into uncommented terraform; lines that are part of the
-# section's own commentary (starting with `# === ` or `# Note:` etc.)
-# stay as comments by design. This matches the convention in main.tf
-# where the section header / comments use `# ====` and `# Note:`, while
-# the resource definitions use `# resource ...`, `#   ...`, `# }`.
+# Uncomment a single platform section in terraform/main.tf.
+#
+# Strategy: find each `# resource ...` / `# data ...` block START within
+# the target section, then uncomment the entire block by counting `{`
+# and `}` until the braces balance. This is robust against `# Note:`
+# commentary that happens to contain shell-style `${var.foo}` strings
+# (a per-line heuristic would mistakenly uncomment those because they
+# end with `}`).
+#
+# Section boundaries are the `# SECTION N:` headers and the OUTPUTS
+# block at the bottom of the file. Resources outside the target section
+# are left untouched.
 uncomment_section() {
     local section_num="$1"
     local file="$2"
@@ -475,52 +480,88 @@ uncomment_section() {
 
     python3 - "$file" "$label" <<'PYEOF'
 import re, sys
+
 path, label = sys.argv[1], sys.argv[2]
 with open(path) as f:
     lines = f.read().splitlines()
 
-in_section = False
-section_header_pattern = re.compile(r"^# =+\s*$")
-section_label_pattern = re.compile(r"^#\s*" + re.escape(label))
+# Terraform top-level block keywords. When we see `# (keyword) ...` we
+# enter "uncomment a block" mode and stay there until the brace count
+# returns to zero.
+KEYWORDS = ("resource", "data", "variable", "output", "module", "provider", "locals")
+block_start_re = re.compile(r"^# (?:" + "|".join(KEYWORDS) + r")\b")
+
+section_start_re = re.compile(r"^#\s*" + re.escape(label))
+any_section_or_outputs_re = re.compile(r"^#\s*(?:SECTION\s+\d+:|OUTPUTS)")
+
+
+def uncomment_line(line: str) -> str:
+    """Strip the leading `# ` (or `#` for blank-comment lines)."""
+    if line.startswith("# "):
+        return line[2:]
+    if line.startswith("#"):
+        return line[1:]
+    return line
+
+
+def count_braces(text: str) -> int:
+    """Net brace delta (+1 per `{`, -1 per `}`)."""
+    return text.count("{") - text.count("}")
+
+
+in_target_section = False
+in_block = False
+brace_depth = 0
 
 out = []
-for i, line in enumerate(lines):
-    # Detect the start of the target section
-    if not in_section and section_label_pattern.match(line):
-        in_section = True
+for line in lines:
+    # Enter target section
+    if not in_target_section and section_start_re.match(line):
+        in_target_section = True
         out.append(line)
         continue
 
-    # Detect the start of the NEXT section (any "# SECTION N:" or "# OUTPUTS")
-    if in_section and (re.match(r"^#\s*SECTION\s+\d+:", line) or re.match(r"^#\s*OUTPUTS", line)):
-        in_section = False
+    # Leave target section when we hit the next SECTION or OUTPUTS header
+    if in_target_section and any_section_or_outputs_re.match(line) and not section_start_re.match(line):
+        in_target_section = False
+        # Defensive: if we were mid-block somehow, abandon it (shouldn't happen with sane input).
+        in_block = False
+        brace_depth = 0
         out.append(line)
         continue
 
-    if in_section:
-        # Uncomment resource/data definitions and their bodies.
-        # Pattern: `# resource ...`, `# data ...`, `#   foo = bar`, `# }`,
-        # `# variable`, `# locals`, `# output`.
-        # Leave commentary alone: `# Note:`, blank `#`, anything starting
-        # with `# something_human_words` that isn't a terraform keyword.
-        # Heuristic: uncomment if the line looks like terraform syntax.
-        m = re.match(r"^(#)( *)(.*)$", line)
-        if m:
-            spaces, content = m.group(2), m.group(3)
-            stripped = content.strip()
-            # Terraform-y starting tokens
-            if (stripped.startswith(("resource ", "data ", "variable ", "output ", "locals", "module ", "provider "))
-                or stripped in ("{", "}", "")
-                or re.match(r"^[a-z_][a-z0-9_]*\s*=", stripped)        # key = value
-                or stripped.startswith(("depends_on", "lifecycle", "replication", "auto"))
-                or stripped == "}"
-                or stripped.endswith("}")
-                or stripped.endswith("{")):
-                out.append(spaces + content)
-                continue
+    if not in_target_section:
         out.append(line)
-    else:
-        out.append(line)
+        continue
+
+    # ---- Inside the target section ----
+
+    if in_block:
+        # We're inside a `# resource ... { ... # }` block; uncomment
+        # every line until braces balance.
+        uncommented = uncomment_line(line)
+        out.append(uncommented)
+        brace_depth += count_braces(uncommented)
+        if brace_depth <= 0:
+            in_block = False
+            brace_depth = 0
+        continue
+
+    # Look for the start of a new resource/data/etc block
+    if block_start_re.match(line):
+        uncommented = uncomment_line(line)
+        out.append(uncommented)
+        brace_depth = count_braces(uncommented)
+        # A `# resource ... {` opens depth=1; if the line is somehow
+        # complete (e.g. single-line definition) we stay out of block mode.
+        if brace_depth > 0:
+            in_block = True
+        else:
+            brace_depth = 0
+        continue
+
+    # Plain commentary inside the section — leave alone.
+    out.append(line)
 
 with open(path, "w") as f:
     f.write("\n".join(out) + "\n")
@@ -879,6 +920,12 @@ phase_14_cleanup() {
             ok "Removed $(basename "$f")"
         fi
     done
+    # The tests/ dir holds template-maintainer unit tests; end users don't
+    # need them in their agent repo.
+    if [[ -d "$REPO_ROOT/tests" ]]; then
+        rm -rf "$REPO_ROOT/tests"
+        ok "Removed tests/"
+    fi
     hr
 }
 
@@ -1044,4 +1091,9 @@ main() {
     ok "${BOLD}Setup complete!${NC} Welcome to Comites.ai."
 }
 
-main "$@"
+# Only run main when this file is invoked directly. Sourcing the script
+# (e.g. from tests/test_uncomment_section.sh) gets you the function
+# definitions without triggering the interactive flow.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
