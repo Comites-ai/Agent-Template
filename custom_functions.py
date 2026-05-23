@@ -7,7 +7,7 @@ is shown to the LLM as the tool description, so write clear docstrings
 that explain what the tool does, what arguments it takes, and what it
 returns.
 
-Pattern:
+Pattern for adding a new tool:
 
     def my_tool(some_arg: str) -> dict:
         \"\"\"
@@ -27,48 +27,80 @@ Then in agent.py:
     ...
     tools=[FunctionTool(my_tool)],
 """
+import os
+from typing import Any, Dict
+
+from .docs_utilities import get_docs_connector
+
 
 # ============================================================================
-# (Optional) Persistent memory via Google Docs
+# Persistent memory via Google Docs (wired up by default in agent.py)
 #
-# get_started_linux.sh offers to wire up a memory doc when you set up the
-# agent. If you opted in, AGENT_MEMORY_DOC_ID is set in .env and the doc
-# is shared with the agent service account. Uncomment the functions below
-# and add them to root_agent.tools to give the agent persistent memory.
+# The template ships with these two memory tools already registered in
+# `root_agent.tools`. The Google Doc ID comes from AGENT_MEMORY_DOC_ID in
+# .env (get_started_linux.sh prompts for it). The doc must be shared
+# (Editor access) with the per-agent SA email — that's the SA the
+# Reasoning Engine runs as (see .agent_engine_config.json).
 #
-# These require `google-api-python-client` and `google-auth*` (already in
-# requirements.txt) plus a `docs_utilities.py` module providing
-# get_docs_connector(). Copy that module from
-# https://github.com/Comites-ai/the-forum/tree/main/docs/examples
-# (or look at how agents/growth_coach implements it).
+# If you don't want memory:
+#   1. Remove the two FunctionTool entries from root_agent.tools in agent.py
+#   2. Delete these two functions (or leave them — they'll just go unused)
+#   3. Leave AGENT_MEMORY_DOC_ID unset (the tools no-op via the raise)
 # ============================================================================
 
-# import os
-# from .docs_utilities import get_docs_connector
-#
-# def get_agent_memory() -> str:
-#     \"\"\"
-#     Retrieve the agent's persistent memory from the configured Google Doc.
-#
-#     The doc ID comes from AGENT_MEMORY_DOC_ID in .env. The doc must be
-#     shared (Editor access) with the agent's service account.
-#
-#     Returns:
-#         The full text content of the memory document.
-#     \"\"\"
-#     doc_id = os.environ['AGENT_MEMORY_DOC_ID']
-#     return get_docs_connector().read_doc(doc_id)
-#
-#
-# def update_agent_memory(updated_memory: str) -> dict:
-#     \"\"\"
-#     Replace the agent's persistent memory with the provided text.
-#
-#     Args:
-#         updated_memory: Complete new memory document text.
-#
-#     Returns:
-#         API response confirming the update.
-#     \"\"\"
-#     doc_id = os.environ['AGENT_MEMORY_DOC_ID']
-#     return get_docs_connector().write_doc(doc_id, updated_memory)
+def get_agent_memory() -> str:
+    """
+    Retrieve the agent's persistent memory from the configured Google Doc.
+
+    The doc ID comes from AGENT_MEMORY_DOC_ID in .env. The doc must be
+    shared (Editor access) with the agent's runtime service account
+    (BOT_ACCOUNT_ID@AGENT_PROJECT_ID.iam.gserviceaccount.com).
+
+    Returns:
+        The full text content of the memory document. May be an empty
+        string if the doc has no content yet.
+
+    Raises:
+        ValueError: if AGENT_MEMORY_DOC_ID is not set in the environment.
+        googleapiclient.errors.HttpError (403): if the doc hasn't been
+            shared with the agent's runtime service account.
+    """
+    doc_id = os.environ.get("AGENT_MEMORY_DOC_ID")
+    if not doc_id:
+        raise ValueError(
+            "AGENT_MEMORY_DOC_ID is not set. Either set it in .env (and on the "
+            "deployed Reasoning Engine) or remove the memory tools from "
+            "root_agent.tools in agent.py."
+        )
+    return get_docs_connector().read_doc(doc_id)
+
+
+def update_agent_memory(updated_memory: str) -> Dict[str, Any]:
+    """
+    Replace the agent's persistent memory with the provided text.
+
+    Use this at the end of a session (or whenever the agent has new
+    information worth persisting) to write back updated notes. The
+    write replaces the entire document body.
+
+    Args:
+        updated_memory: Complete new memory document text. This replaces
+            the existing content — pass the full updated memory, not just
+            the changes.
+
+    Returns:
+        API response confirming the update.
+
+    Raises:
+        ValueError: if AGENT_MEMORY_DOC_ID is not set in the environment.
+        googleapiclient.errors.HttpError (403): if the doc hasn't been
+            shared with the agent's runtime service account.
+    """
+    doc_id = os.environ.get("AGENT_MEMORY_DOC_ID")
+    if not doc_id:
+        raise ValueError(
+            "AGENT_MEMORY_DOC_ID is not set. Either set it in .env (and on the "
+            "deployed Reasoning Engine) or remove the memory tools from "
+            "root_agent.tools in agent.py."
+        )
+    return get_docs_connector().write_doc(doc_id, updated_memory)

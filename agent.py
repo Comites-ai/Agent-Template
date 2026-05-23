@@ -18,8 +18,10 @@ import os
 os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'
 
 from google.adk.agents import Agent
-from google.adk.tools import FunctionTool  # noqa: F401 — re-exported for convenience when you add tools
+from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool  # noqa: F401
+
+from .custom_functions import get_agent_memory, update_agent_memory
 
 # --- (Optional) Scheduler MCP toolset ---
 # Uncomment when you've enabled the scheduler in terraform (Section 6),
@@ -66,7 +68,16 @@ root_agent = Agent(
     ),
     instruction=STUB_INSTRUCTION,
     tools=[
-        # Add your tools here as you build:
+        # Persistent memory via Google Docs — wired up by default.
+        # The stub instruction above doesn't actually call these, so the
+        # first deploy works even if you skipped the memory doc setup in
+        # get_started_linux.sh. Your real prompt should call
+        # get_agent_memory() at the start of each session and
+        # update_agent_memory(...) before ending it.
+        FunctionTool(get_agent_memory),
+        FunctionTool(update_agent_memory),
+
+        # Add your own tools below as you build:
         #   FunctionTool(your_function_from_custom_functions),
         #   AgentTool(agent=your_subagent_from_custom_agents),
         #   scheduler_toolset,

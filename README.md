@@ -53,7 +53,9 @@ The template gives you:
 
 Before running `./get_started_linux.sh`:
 
-1. **A local clone of [The Forum](https://github.com/Comites-ai/the-forum)** with its own `.env` and `terraform/terraform.tfvars` already populated. `get_started_linux.sh` reads from these to figure out what project The Forum runs in and what its public URL is.
+1. **A local clone of [The Forum](https://github.com/Comites-ai/the-forum)** with its own `.env` and `terraform/terraform.tfvars` already populated, AND The Forum already deployed at least once. `get_started_linux.sh` reads from these to figure out what project The Forum runs in and what its public URL is.
+
+   The "deployed at least once" part matters because this template's terraform creates IAM bindings that reference the Forum project's Vertex AI Reasoning Engine Service Agent (`service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com`), which only auto-exists once Vertex AI has been used in that project. **`get_started_linux.sh` handles this automatically** by running `gcloud beta services identity create --service=aiplatform.googleapis.com --project=$FORUM_PROJECT_ID` during its API-bootstrap phase (it's idempotent — no-op if the identity already exists). You only need to know about this if you're applying terraform by hand, or if you don't have `roles/serviceusage.serviceUsageAdmin` on the Forum project — in which case the bootstrap will print a warning and ask the Forum's admin to run that one command before you re-try.
 2. **A GCP project for this agent** (separate from The Forum's project) with billing linked. Create with:
    ```bash
    gcloud projects create YOUR_AGENT_PROJECT \

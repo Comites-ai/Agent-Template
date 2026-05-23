@@ -25,9 +25,18 @@ The platform sections (Slack/Google Chat/Telegram/Discord/Scheduler MCP) in `mai
 - Each secret must have an IAM binding granting `roles/secretmanager.secretAccessor` to whatever principal needs to read it (The Forum's Cloud Run SA for platform tokens; the agent's Reasoning Engine SA for things the agent itself reads). The IAM binding lives in `terraform/main.tf` next to the secret container.
 - If you see a `403 Permission Denied` on a secret read, the fix is almost always to add or correct that IAM binding in terraform. Don't grant the permission via `gcloud secrets add-iam-policy-binding` and walk away — terraform will drift.
 
-### 3. The Reasoning Engine deploys to THIS agent's project — not The Forum's
+### 3. The Reasoning Engine deploys to THE FORUM's project, but RUNS AS this agent's per-agent SA
 
-The Vertex AI Reasoning Engine for this agent runs in the project named by `GOOGLE_CLOUD_PROJECT` in `.env` (which equals `project_id` in `terraform/terraform.tfvars`). The Forum's Cloud Run service runs in a separate project (`FORUM_PROJECT_ID`). The Forum reads this agent's Reasoning Engine resource name from Firestore and calls it cross-project. Don't try to deploy the Reasoning Engine into The Forum's project — that's where the routing service lives, not where agents live.
+There are two projects in play:
+
+- **The Forum's project** (`FORUM_PROJECT_ID` = `GOOGLE_CLOUD_PROJECT` in `.env`): Where The Forum runs, and where every agent's Reasoning Engine physically lives. Administratively centralized so The Forum can list/route to all agents.
+- **This agent's own project** (`AGENT_PROJECT_ID` in `.env` = `project_id` in `terraform/terraform.tfvars`): Where the per-agent SA, secrets, and ADK staging bucket live.
+
+The Reasoning Engine's runtime identity is the per-agent SA (`BOT_ACCOUNT_ID@AGENT_PROJECT_ID.iam.gserviceaccount.com`), set via `.agent_engine_config.json`'s `service_account` field. **That's the SA you share Google Docs / Sheets / Drive files with** — not the Forum's compute SA, and not your own user account. Sharing with anyone else won't grant the deployed agent access.
+
+The cross-project IAM that makes this work is provisioned by terraform: the Forum's Vertex AI Reasoning Engine Service Agent gets `roles/iam.serviceAccountTokenCreator` on the per-agent SA (to mint runtime tokens) and `roles/storage.objectViewer` on the staging bucket (to fetch the packaged agent code at cold start). Don't deploy the Reasoning Engine to the agent's own project — that wastes the cross-project IAM and means The Forum can't see your agent in its routing lookups.
+
+**Cross-project IAM dependency:** The Forum project must have the Vertex AI service identity provisioned before this agent's terraform can apply, because the IAM bindings reference the Forum's Vertex AI Reasoning Engine Service Agent (`service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com`), which only auto-exists once Vertex AI has been used in that project. **`get_started_linux.sh` handles this automatically** (phase 5 runs `gcloud beta services identity create --service=aiplatform.googleapis.com --project=$FORUM_PROJECT_ID` — idempotent, no-op if the identity already exists). If you skipped the bootstrap or are applying terraform by hand and hit a "principal does not exist" error on `engine_token_creator` or `engine_staging_reader`, run that same gcloud command and re-apply. The Forum's admin needs `roles/serviceusage.serviceUsageAdmin` on the Forum project to run it.
 
 ### 4. Always use `deploy_and_update.sh` to deploy
 

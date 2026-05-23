@@ -41,6 +41,14 @@ data "google_project" "forum" {
 locals {
   # The Forum's Cloud Run runs as the project's default compute SA.
   forum_runtime_sa = "${data.google_project.forum.number}-compute@developer.gserviceaccount.com"
+
+  # Vertex AI Reasoning Engine Service Agent in the Forum project. When
+  # this agent is deployed (via deploy_and_update.sh, which lands the
+  # Reasoning Engine in the Forum's project), this service agent is the
+  # principal Vertex AI uses to mint short-lived credentials for the
+  # runtime SA. It needs `roles/iam.serviceAccountTokenCreator` on the
+  # per-agent SA, granted below as `engine_token_creator`.
+  forum_vertex_ai_service_agent = "service-${data.google_project.forum.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
 }
 
 # --- APIs ---
@@ -121,6 +129,14 @@ resource "google_project_organization_policy" "allow_sa_key_creation" {
 # --- Staging bucket for ADK deployments ---
 # `adk deploy agent_engine` uploads the agent code here before deploying
 # to Vertex AI. Lifecycle policy cleans up old uploads after 7 days.
+#
+# Note on project placement: the Reasoning Engine itself runs in the
+# Forum's project (so all agents are administratively centralized), but
+# the staging bucket lives in THIS project. That keeps the agent's code
+# artifacts isolated under the agent's billing and IAM. The Forum's
+# Vertex AI Service Agent gets read-only access via the cross-project
+# IAM binding below (`engine_staging_reader`), so it can fetch the
+# packaged agent code at cold-start time.
 resource "google_storage_bucket" "staging" {
   project                     = var.project_id
   name                        = "${var.project_id}-staging"
@@ -140,6 +156,34 @@ resource "google_storage_bucket" "staging" {
   depends_on = [
     google_project_service.storage,
   ]
+}
+
+# --- Cross-project IAM for deploying as the per-agent SA ---
+#
+# The Reasoning Engine lands in the Forum's project but RUNS AS this
+# agent's per-agent SA (configured via .agent_engine_config.json's
+# `service_account` field). For Vertex AI to assume the per-agent SA's
+# identity at runtime, the Vertex AI Reasoning Engine Service Agent in
+# the Forum project needs:
+#
+#   1. Permission to mint tokens for the per-agent SA
+#      (`roles/iam.serviceAccountTokenCreator` on the SA itself).
+#   2. Permission to read the packaged agent code from this staging
+#      bucket (`roles/storage.objectViewer` on the bucket).
+#
+# Without these, the deploy succeeds but the engine fails to start with
+# a permission-denied error at first invocation.
+
+resource "google_service_account_iam_member" "engine_token_creator" {
+  service_account_id = google_service_account.agent.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${local.forum_vertex_ai_service_agent}"
+}
+
+resource "google_storage_bucket_iam_member" "engine_staging_reader" {
+  bucket = google_storage_bucket.staging.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${local.forum_vertex_ai_service_agent}"
 }
 
 # ==============================================================================

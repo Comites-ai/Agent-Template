@@ -15,8 +15,18 @@
 #     Manager (slack token, telegram token, discord token, or chat SA key)
 #
 # Configuration is read from .env in this directory. Required keys:
-#   GOOGLE_CLOUD_PROJECT, AGENT_DISPLAY_NAME, ADK_BIN, ADK_PYTHON,
-#   FORUM_PROJECT_ID
+#   GOOGLE_CLOUD_PROJECT (= the Forum's project; the Reasoning Engine
+#     lives in this project administratively, alongside every other agent),
+#   AGENT_PROJECT_ID (= this agent's own project; the per-agent SA, secrets,
+#     and staging bucket live here),
+#   AGENT_DISPLAY_NAME, FORUM_PROJECT_ID (same as GOOGLE_CLOUD_PROJECT),
+#   ADK_BIN, ADK_PYTHON.
+#
+# The Reasoning Engine RUNS AS the per-agent SA via the `service_account`
+# field in .agent_engine_config.json (next to this script). Without that
+# config file the engine would inherit the Forum project's default
+# compute SA — shared with every other agent — which defeats per-agent
+# isolation. Confirm the file is present and points at the right SA.
 
 set -euo pipefail
 
@@ -37,13 +47,37 @@ else
     exit 1
 fi
 
-PROJECT_ID="${GOOGLE_CLOUD_PROJECT:?GOOGLE_CLOUD_PROJECT must be set in .env}"
+# Deploy target = the Forum's project. The Reasoning Engine runs there
+# (alongside every other agent), but uses this agent's per-agent SA as
+# its runtime identity (see .agent_engine_config.json).
+FORUM_PROJECT_ID="${FORUM_PROJECT_ID:?FORUM_PROJECT_ID must be set in .env}"
+
+# Agent's own project = where the SA, secrets, and staging bucket live.
+AGENT_PROJECT_ID="${AGENT_PROJECT_ID:?AGENT_PROJECT_ID must be set in .env}"
+
+# GOOGLE_CLOUD_PROJECT and FORUM_PROJECT_ID should normally match in .env
+# (both = the Forum's project), but tolerate one being unset.
+PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-$FORUM_PROJECT_ID}"
+
 REGION="${GOOGLE_CLOUD_REGION:-us-central1}"
 AGENT_DISPLAY_NAME="${AGENT_DISPLAY_NAME:?AGENT_DISPLAY_NAME must be set in .env}"
-FORUM_PROJECT_ID="${FORUM_PROJECT_ID:?FORUM_PROJECT_ID must be set in .env}"
 ADK_BIN="${ADK_BIN:-$(command -v adk 2>/dev/null || echo adk)}"
 ADK_PYTHON="${ADK_PYTHON:-$(dirname "$ADK_BIN")/python3}"
 AGENT_DIR="${SCRIPT_DIR}"
+
+# Hard-fail if the SA-assignment config is missing — without it the engine
+# silently inherits the Forum's compute SA (shared with every other agent)
+# and per-agent secret/doc isolation breaks. get_started_linux.sh generates
+# this file; if it's gone, something went wrong.
+if [[ ! -f "${SCRIPT_DIR}/.agent_engine_config.json" ]]; then
+    echo "ERROR: .agent_engine_config.json missing in ${SCRIPT_DIR}."
+    echo "  Without this file the deployed engine would run as the Forum's"
+    echo "  default compute SA instead of this agent's per-agent SA, and"
+    echo "  every other agent's per-doc / per-secret IAM would apply to it."
+    echo "  Re-run ./get_started_linux.sh to regenerate it, or recreate from"
+    echo "  the template at the same path."
+    exit 1
+fi
 
 # ------------------------------------------------------------------
 # Output helpers
@@ -57,7 +91,7 @@ get_existing_agent_id() {
     "$ADK_PYTHON" -c "
 import vertexai
 from vertexai.preview import reasoning_engines
-vertexai.init(project='${PROJECT_ID}', location='${REGION}')
+vertexai.init(project='${FORUM_PROJECT_ID}', location='${REGION}')
 for e in reasoning_engines.ReasoningEngine.list():
     if '${AGENT_DISPLAY_NAME}' in (e.display_name or ''):
         print(e.resource_name.split('/')[-1])
@@ -66,7 +100,7 @@ for e in reasoning_engines.ReasoningEngine.list():
 }
 
 get_agent_resource_name() {
-    echo "projects/${PROJECT_ID}/locations/${REGION}/reasoningEngines/$1"
+    echo "projects/${FORUM_PROJECT_ID}/locations/${REGION}/reasoningEngines/$1"
 }
 
 # ------------------------------------------------------------------
@@ -74,8 +108,12 @@ get_agent_resource_name() {
 # ------------------------------------------------------------------
 log "Pre-flight"
 
-gcloud config set project "$PROJECT_ID" --quiet
-ok "gcloud project set to $PROJECT_ID"
+# We deploy to the Forum's project. The agent's own project is only
+# touched indirectly (via the SA assignment, staging bucket reads, and
+# cross-project secret IAM bindings already wired by terraform).
+gcloud config set project "$FORUM_PROJECT_ID" --quiet
+ok "gcloud project set to $FORUM_PROJECT_ID (deploy target)"
+ok "Per-agent SA + secrets live in: $AGENT_PROJECT_ID"
 
 if ! command -v "$ADK_BIN" >/dev/null 2>&1 && [[ ! -x "$ADK_BIN" ]]; then
     err "ADK binary not found at $ADK_BIN"
@@ -100,19 +138,22 @@ fi
 # Step 2: Deploy the new Reasoning Engine
 # ------------------------------------------------------------------
 log "Step 2: Deploying agent to Vertex AI Agent Engine..."
-echo "  Project:  $PROJECT_ID"
-echo "  Region:   $REGION"
-echo "  Source:   $AGENT_DIR"
+echo "  Engine project:   $FORUM_PROJECT_ID  (Forum project — where every agent lives)"
+echo "  Staging bucket:   gs://${AGENT_PROJECT_ID}-staging  (in this agent's project)"
+echo "  Region:           $REGION"
+echo "  Source:           $AGENT_DIR"
+echo "  Runtime SA:       (from .agent_engine_config.json — should be this agent's per-agent SA)"
 
 AGENT_PARENT_DIR="$(dirname "$AGENT_DIR")"
 AGENT_PACKAGE_NAME="$(basename "$AGENT_DIR")"
 
 DEPLOY_OUTPUT=$(cd "$AGENT_PARENT_DIR" && "$ADK_BIN" deploy agent_engine \
-    --project "$PROJECT_ID" \
+    --project "$FORUM_PROJECT_ID" \
     --region "$REGION" \
-    --staging_bucket "gs://${PROJECT_ID}-staging" \
+    --staging_bucket "gs://${AGENT_PROJECT_ID}-staging" \
     --display_name "$AGENT_DISPLAY_NAME" \
     --trace_to_cloud \
+    --agent_engine_config_file "${AGENT_DIR}/.agent_engine_config.json" \
     "$AGENT_PACKAGE_NAME" 2>&1) || {
     err "Deployment failed!"
     echo "$DEPLOY_OUTPUT"
@@ -125,7 +166,7 @@ echo "$DEPLOY_OUTPUT"
 if echo "$DEPLOY_OUTPUT" | grep -qE "Deploy failed:|failed to start"; then
     err "ADK exited 0 but the engine failed to start. NOT touching the old agent."
     err "Check logs:"
-    err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\"' --project=$PROJECT_ID --limit=50"
+    err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\"' --project=$FORUM_PROJECT_ID --limit=50"
     exit 1
 fi
 
@@ -145,7 +186,7 @@ log "Step 3: Smoke testing new agent..."
 SMOKE_RESULT=$("$ADK_PYTHON" -c "
 import vertexai
 from vertexai.preview import reasoning_engines
-vertexai.init(project='${PROJECT_ID}', location='${REGION}')
+vertexai.init(project='${FORUM_PROJECT_ID}', location='${REGION}')
 agent = reasoning_engines.ReasoningEngine('${NEW_RESOURCE_NAME}')
 session = agent.create_session(user_id='smoke-test')
 print(f'Session created: {session[\"id\"]}')
@@ -158,7 +199,7 @@ else
     err "Smoke test failed. NOT touching the old agent."
     echo "$SMOKE_RESULT" | tail -10
     err "Check logs:"
-    err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\" AND resource.labels.reasoning_engine_id=\"$NEW_AGENT_ID\"' --project=$PROJECT_ID --limit=50"
+    err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\" AND resource.labels.reasoning_engine_id=\"$NEW_AGENT_ID\"' --project=$FORUM_PROJECT_ID --limit=50"
     exit 1
 fi
 
