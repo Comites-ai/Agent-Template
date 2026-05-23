@@ -6,13 +6,13 @@ Welcome! This repository is the starter template for building Comites.ai agents 
 
 The name "Comites" comes from the advisors who counseled Roman emperors. In our vision, users create AI agents (comites) that advise and assist them. "The Forum" is the place where users interact with their comites — and this template is the scaffolding that makes it fast and safe to spin up a new comes.
 
-## Why AGPL-3.0?
+## Why MIT?
 
-We've chosen the AGPL license to keep Comites.ai's projects — including the Agent Template — open source and to keep agents built on the platform open source by default.
+This template is licensed MIT — the most permissive widely-used open source license — because templates are scaffolding, and people building agents on top of it should be able to keep their own agent code under whatever license fits their situation (proprietary work for hire, internal tools, side projects, open source — anything). Forcing a copyleft license on every downstream agent would shrink the audience without giving Comites.ai anything in return.
 
-As part of this license, anyone who improves the template (or builds an agent from it and runs it as a network service) is required to make those improvements available — so we can all benefit from each other's work.
+[The Forum](https://github.com/Comites-ai/the-forum) itself stays AGPL-3.0 — that's a deployed service, where network copyleft makes sense. This template is starter code that gets cloned and modified, where MIT makes sense.
 
-We have no intention of ever making this software proprietary. The goal is to ensure we can all have fun writing our agents and running them in an open-source environment.
+If you contribute changes back to the template, the CLA (below) is what gives Comites.ai the right to keep redistributing your contributions under MIT alongside the rest of the template.
 
 ## Contributor License Agreement (CLA)
 

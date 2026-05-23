@@ -52,4 +52,4 @@ For trademark licensing inquiries or questions about this policy, please contact
 
 ## Note on Open Source License
 
-This trademark policy is separate from and in addition to the AGPL-3.0 software license. The open source license grants you rights to the code; this policy governs use of our brand names and trademarks.
+This trademark policy is separate from and in addition to the software license (MIT) under which this template is distributed. The MIT license grants you broad rights to use, modify, and redistribute the code, including in closed-source agents you build from the template. This trademark policy governs use of our brand names and trademarks, which the MIT license does not grant.

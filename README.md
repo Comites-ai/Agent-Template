@@ -125,7 +125,7 @@ After that, the repo is about *your* agent. Edit `agent.py` with your real promp
 │   ├── terraform.tfvars.example
 │   ├── providers.tf          # GCS backend wired by get_started
 │   └── README.md
-├── LICENSE.txt               # AGPL-3.0
+├── LICENSE.txt               # MIT
 ├── TRADEMARK.md
 ├── THIRD_PARTY_LICENSES
 ├── CONTRIBUTING.md           # CLA flow (same as The Forum)
@@ -227,7 +227,9 @@ Both `MAINTAINER_SETUP.md` and `test.md` are deleted by `get_started_linux.sh` s
 
 ## License
 
-AGPL-3.0. See [LICENSE.txt](LICENSE.txt) and [TRADEMARK.md](TRADEMARK.md). Because AGPL is a network copyleft, any agent you build from this template inherits AGPL-3.0 by default — meaning anyone who interacts with your deployed agent has the right to your agent's source. If you want to change the license on your fork, you can — but you have to actively do so and ensure you're not redistributing AGPL'd code under a more permissive license.
+MIT. See [LICENSE.txt](LICENSE.txt) and [TRADEMARK.md](TRADEMARK.md). The template's MIT license means you can use, modify, and redistribute it freely — including as the basis for closed-source agents. The trademark policy in `TRADEMARK.md` still applies separately: you can't name your project "Comites", "The Forum", or anything that implies it's a Comites.ai product.
+
+(Note: [The Forum](https://github.com/Comites-ai/the-forum) itself is AGPL-3.0 — a deliberate choice for a deployed service. This template is permissive scaffolding, so picking the same license made less sense.)
 
 ## Acknowledgements
 
