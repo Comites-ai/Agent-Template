@@ -109,7 +109,7 @@ After that, the repo is about *your* agent. Edit `agent.py` with your real promp
 
 ```
 .
-├── agent.py                  # ADK root agent (stub greeting until you replace)
+├── agent.py                  # ADK root agent (Junius Rusticus stub persona until you replace)
 ├── __init__.py
 ├── custom_functions.py       # Your FunctionTool implementations
 ├── custom_agents.py          # Your sub-agents (used via AgentTool)
@@ -193,7 +193,7 @@ Most changes touch one or two of these:
 - **`terraform/main.tf`** — all GCP infrastructure for the agent's dedicated project. Section 1 (common) is always active; sections 2-6 (Slack, Google Chat, Telegram, Discord, Scheduler MCP) are commented blocks that `uncomment_section` selectively enables. If you add a new platform or rename resources, update the expected-resource lists in `tests/test_uncomment_section.sh`.
 - **`deploy_and_update.sh`** — blue/green deploy. Generalizes the pattern from `agents/growth_coach`. Reads config from `.env`.
 - **`register_agent.py`** — auto-detects platforms from Secret Manager and writes the agent's Firestore record. Validates each token via the platform's native API before writing.
-- **`agent.py`** — the stub agent that the template ships. Replaces operator-facing logic in `STUB_INSTRUCTION` and `description`. If you change the stub greeting, update the expected string in `test.md`.
+- **`agent.py`** — the stub agent that the template ships. Replaces operator-facing logic in `STUB_INSTRUCTION` and `description`. The default persona is Junius Rusticus (Stoic teacher of Marcus Aurelius — namesake inspiration for the project). If you change the stub persona, update the expected keywords in `test.md` step 7.
 - **`AGENTS.md`** — hard rules for AI agents (and humans) working in repos created from the template. Add a new rule when there's a way to break an agent that's not obvious from the code.
 
 ## How CI works

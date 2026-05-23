@@ -1105,14 +1105,18 @@ EOF
     cat <<EOF
 ${BOLD}[ ] First deploy${NC}
     ./deploy_and_update.sh
-    Then DM your bot on any enabled platform. You should get back:
-      "HI! I'm a new agent that is being created using the comites.ai
-       template! I haven't been configured to do anything yet."
+    Then DM your bot on any enabled platform. The agent will introduce
+    itself as Junius Rusticus — the Roman Stoic philosopher and teacher
+    of Marcus Aurelius — whose title (comes / comites) inspired the
+    project's name. Wording varies per response; it should include the
+    name Rusticus, a reference to Marcus Aurelius, and a reference to
+    Comites.ai.
 
 ${BOLD}[ ] Replace the stub with real agent logic${NC}
-    Edit agent.py — replace STUB_INSTRUCTION with your real prompt and
-    description, then add tools as you build them. See README.md's
-    "Next steps" section and AGENTS.md for guidance.
+    Edit agent.py — replace STUB_INSTRUCTION (the Junius Rusticus
+    persona) with your real prompt and description, then add tools as
+    you build them. See README.md's "Next steps" section and AGENTS.md
+    for guidance.
 
 ${BOLD}=========================================================${NC}
 EOF

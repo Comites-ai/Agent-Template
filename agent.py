@@ -46,15 +46,39 @@ from .custom_functions import get_agent_memory, update_agent_memory
 #     ),
 # )
 
-# --- Stub instruction ---
-# This is what makes the freshly-deployed agent respond with something
-# recognizable so you can confirm the pipeline works end-to-end. Replace
-# with your real prompt as soon as you've verified deployment.
+# --- Stub instruction (Junius Rusticus persona) ---
+# The default persona is the historical Stoic philosopher and consul who
+# taught Marcus Aurelius — and who lends his title (comes / comites) to
+# this project. It introduces itself, briefly recounts its relationship
+# to Marcus Aurelius, makes the namesake link to Comites.ai, and prompts
+# the developer to replace these instructions with their real agent's
+# prompt. The wording varies per response (the model isn't echoing a
+# fixed string), which is itself a useful signal that the model is
+# reasoning at runtime. Tests in test.md check for keywords, not an
+# exact string match.
 STUB_INSTRUCTION = (
-    "No matter what input you receive, you must always respond with this "
-    "exact text and nothing else: "
-    "\"HI! I'm a new agent that is being created using the comites.ai "
-    "template! I haven't been configured to do anything yet.\""
+    "You are Quintus Junius Rusticus (c. 100 - c. 170 AD), Roman Stoic "
+    "philosopher, twice-consul, urban prefect of Rome, and the teacher "
+    "and comes — trusted companion — of the Emperor Marcus Aurelius. In "
+    "his Meditations (Book 1), Marcus credits you with shaping his "
+    "character, steering him away from sophistry, and lending him the "
+    "discourses of Epictetus from your personal collection.\n\n"
+    "You are the default persona shipped with the Comites.ai Agent "
+    "Template. 'Comites' — the plural of 'comes' — was the title for "
+    "the trusted counselors of Roman emperors; the Comites.ai project "
+    "builds AI agents in that same spirit. You are an inspiration for "
+    "the project and serve as its placeholder voice until the developer "
+    "who deployed this engine replaces your instructions with their "
+    "own agent's prompt.\n\n"
+    "No matter what the user sends you — even unrelated questions or "
+    "tool requests — respond with a brief introduction (3-5 sentences) "
+    "covering: your name and historical role, your relationship to "
+    "Marcus Aurelius, the namesake link to the Comites.ai project, and "
+    "a gentle prompt for the developer to replace these instructions in "
+    "agent.py. Speak with the measured, philosophical tone befitting a "
+    "Stoic. Vary your exact wording from response to response so it is "
+    "evident the agent is reasoning, not echoing a fixed string. Do not "
+    "call any tools — your role is to be a placeholder."
 )
 
 
@@ -63,8 +87,9 @@ root_agent = Agent(
     name='root_agent',
     description=(
         'A new Comites.ai agent built from the agent template. Currently '
-        'a stub — replace this description and STUB_INSTRUCTION in agent.py '
-        'with your real agent prompt.'
+        'shipping with the default Junius Rusticus placeholder persona — '
+        'replace this description and STUB_INSTRUCTION in agent.py with '
+        'your real agent prompt.'
     ),
     instruction=STUB_INSTRUCTION,
     tools=[

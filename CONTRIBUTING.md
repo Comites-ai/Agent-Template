@@ -62,7 +62,7 @@ If your company would prefer to have a formal Corporate CLA in place, please con
 
 1. **Fork the repository** and create a new branch from `main`.
 2. **Make your changes** following our standards (below).
-3. **Run through [`test.md`](test.md)** end-to-end: deploy a stub agent from your fork to a real GCP project, enable at least one messaging platform, and confirm the stub greeting reaches you on that platform. CI cannot verify this for you — it requires real GCP credentials.
+3. **Run through [`test.md`](test.md)** end-to-end: deploy a stub agent from your fork to a real GCP project, enable at least one messaging platform, and confirm the Junius Rusticus persona response reaches you on that platform. CI cannot verify this for you — it requires real GCP credentials.
 4. **Submit a pull request** with a clear description of what you've done — CI runs automatically (shell lint + terraform lint + Python syntax).
 5. **Sign the CLA** when prompted by CLA Assistant, and email cla@comites.ai with the supplemental information described above.
 
@@ -109,7 +109,9 @@ The template doesn't have a "run" — `get_started_linux.sh` is the entrypoint. 
 # Walk through the prompts, selecting at least one platform.
 # Once it completes, deploy:
 ./deploy_and_update.sh
-# DM your bot on the platform you enabled. You should get the stub greeting.
+# DM your bot on the platform you enabled. The agent should introduce itself
+# as Junius Rusticus (the template's default placeholder persona) — see
+# test.md step 7 for the exact keywords to verify.
 ```
 
 Full smoke-test instructions are in [`test.md`](test.md).

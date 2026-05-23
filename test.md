@@ -174,11 +174,17 @@ Now add the webhook secret to the agent's Firestore document so The Forum can ve
 2. Tap **Start** (or send `/start` manually).
 3. Send a message: `hello`.
 
-**Expected response**:
+**Expected response** (the agent introduces itself as Junius Rusticus — the historical Stoic teacher of Marcus Aurelius and the namesake inspiration for the Comites.ai project — and prompts you to replace the stub instructions). Exact wording varies per response since the model is reasoning from a persona prompt, not echoing a fixed string. A typical response will look something like:
 
-> HI! I'm a new agent that is being created using the comites.ai template! I haven't been configured to do anything yet.
+> Greetings. I am Quintus Junius Rusticus — Roman Stoic, twice-consul of Rome, and the teacher who Marcus Aurelius credited in his Meditations with shaping his character. I serve as the placeholder voice of the Comites.ai Agent Template, whose name draws on the Roman tradition of trusted imperial counselors. When you are ready, replace my instructions in `agent.py` with the prompt for the agent you intend to build.
 
-If you get exactly that text, the template works end-to-end. ✅
+Verify the response contains all three of these elements:
+
+- The name **Junius Rusticus** (or just "Rusticus")
+- A reference to **Marcus Aurelius**
+- A reference to **Comites.ai** (or just "Comites" / "comes")
+
+If all three appear, the template works end-to-end. ✅ If the response is missing one of them, the model is probably ignoring parts of the prompt — try a higher-quality model in `HIGH_QUALITY_AGENT_MODEL` (`gemini-2.5-pro` is a safe choice) and redeploy.
 
 ### Step 8: Test a redeploy
 
