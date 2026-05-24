@@ -42,17 +42,27 @@ locals {
   # The Forum's Cloud Run runs as the project's default compute SA.
   forum_runtime_sa = "${data.google_project.forum.number}-compute@developer.gserviceaccount.com"
 
-  # Three Vertex AI service agents in the Forum project all need to mint
-  # tokens for the per-agent SA at different phases of the engine lifecycle:
-  #   - gcp-sa-aiplatform        — general AI Platform control plane
-  #   - gcp-sa-aiplatform-re     — Reasoning Engine resource management
-  #   - gcp-sa-aiplatform-cc     — runs the workload CONTAINER and emulates
-  #                                the metadata server inside it. This is
-  #                                the one whose missing binding manifests
-  #                                as the cryptic "Compute Engine Metadata
-  #                                server unavailable. Response status: 500"
-  #                                at engine startup. The other two pass
-  #                                preflight without it.
+  # Three Vertex AI service agents in the Forum project participate in
+  # the agent engine lifecycle at different phases. All three need
+  # iam.serviceAccountTokenCreator on the per-agent SA — missing any one
+  # produces a different startup failure:
+  #   - gcp-sa-aiplatform     — control-plane operations on the engine
+  #                             resource (create / delete / update)
+  #   - gcp-sa-aiplatform-re  — Reasoning Engine resource management;
+  #                             ALSO the principal that reads the staging
+  #                             bucket at cold-start to fetch the packaged
+  #                             agent code (see engine_staging_reader
+  #                             below — it's bound to -re only, not the
+  #                             set, since -re is the only one that
+  #                             actually touches GCS).
+  #   - gcp-sa-aiplatform-cc  — runs the workload CONTAINER and emulates
+  #                             the metadata server inside it. When this
+  #                             binding is missing, the symptom is a 500
+  #                             from /computeMetadata/v1/instance/
+  #                             service-accounts/default/token at engine
+  #                             startup with the misleading message
+  #                             "Compute Engine Metadata server unavailable".
+  #
   # All three are auto-provisioned by `gcloud beta services identity create
   # --service=aiplatform.googleapis.com` (one call provisions all sub-agents),
   # which the bootstrap runs in phase 5.
@@ -249,20 +259,24 @@ resource "google_storage_bucket" "staging" {
 # agent's per-agent SA (configured via .agent_engine_config.json's
 # `service_account` field). Three Vertex AI service agents in the Forum
 # project participate at different phases of the engine lifecycle (see
-# the `forum_vertex_ai_service_agents` local at the top of this file);
-# each needs:
+# the `forum_vertex_ai_service_agents` local at the top of this file).
 #
-#   1. Permission to mint tokens for the per-agent SA
-#      (`roles/iam.serviceAccountTokenCreator` on the SA itself).
-#   2. Permission to read the packaged agent code from this staging
-#      bucket (`roles/storage.objectViewer` on the bucket).
+# Two bindings flow from that:
 #
-# The bindings below fan out to all three with a for_each. The most
-# load-bearing one is the -cc agent (custom container runtime); if its
-# binding is missing the engine deploys cleanly and then 500s on the
-# first invocation with "Compute Engine Metadata server unavailable.
-# Response status: 500" — a failure mode that the other two would pass
-# preflight without surfacing.
+#   1. Token-creator (`roles/iam.serviceAccountTokenCreator`) on the
+#      per-agent SA — fans out to ALL THREE service agents below.
+#      Each agent mints tokens for the per-agent SA in a different
+#      phase; missing any one produces a different startup failure,
+#      and the -cc one (custom container runtime) is the most load-
+#      bearing — its missing binding manifests as the cryptic
+#      "Compute Engine Metadata server unavailable. Response status:
+#      500" that the other two pass preflight without surfacing.
+#
+#   2. Staging-bucket reader (`roles/storage.objectViewer`) — bound
+#      ONLY to the -re agent. Only -re reads the staging bucket at
+#      cold-start to fetch the packaged agent code; the other two
+#      never touch GCS directly, so we don't pollute the bucket's
+#      IAM policy with bindings they wouldn't use.
 
 resource "google_service_account_iam_member" "engine_token_creator" {
   for_each           = local.forum_vertex_ai_service_agents
@@ -277,14 +291,13 @@ resource "google_service_account_iam_member" "engine_token_creator" {
 }
 
 resource "google_storage_bucket_iam_member" "engine_staging_reader" {
-  # Granted to all three service agents (not just -re) as cheap insurance
-  # against the same "wrong service agent" guess that bit us on the token-
-  # creator binding. The agents are distinct GCP-managed principals; there's
-  # no extra cost or escalation surface from listing them here.
-  for_each = local.forum_vertex_ai_service_agents
-  bucket   = google_storage_bucket.staging.name
-  role     = "roles/storage.objectViewer"
-  member   = "serviceAccount:${each.value}"
+  # Only the -re agent reads the staging bucket at cold-start. The other
+  # two never touch GCS directly, so narrowing this binding here. (The
+  # token-creator binding above stays fanned out to all three because each
+  # of them mints tokens in different phases.)
+  bucket = google_storage_bucket.staging.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:service-${data.google_project.forum.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
 }
 
 # --- Per-agent SA roles on the Forum project ---
