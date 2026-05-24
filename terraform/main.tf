@@ -169,6 +169,21 @@ resource "google_service_account" "agent" {
   ]
 }
 
+# --- Per-agent SA: permission to USE APIs on its own project ---
+# `docs_utilities.py` calls `credentials.with_quota_project(AGENT_PROJECT_ID)`
+# so Workspace API calls (Docs/Drive/Sheets) bill to this agent's project
+# rather than the Forum's (which doesn't enable Workspace APIs). That quota-
+# project override requires the caller to have `serviceusage.services.use`
+# on the chosen project. Without this binding, every Docs/Drive/Sheets call
+# from the deployed engine 403s with `USER_PROJECT_DENIED` — and confusingly,
+# sharing the target doc with the SA doesn't help, because the call never
+# reaches the per-doc permission check.
+resource "google_project_iam_member" "agent_serviceusage_consumer" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.agent.email}"
+}
+
 # Allow service account key creation for this project. Most orgs enforce
 # `constraints/iam.disableServiceAccountKeyCreation` org-wide. Google Chat
 # (Section 3) needs an SA key in Secret Manager, so we override the policy
