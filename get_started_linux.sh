@@ -158,6 +158,32 @@ phase_2_prereqs() {
         gcloud auth application-default login
     fi
     ok "Application Default Credentials configured."
+
+    # Ensure the gcloud `beta` component is installed. We use `gcloud beta
+    # billing projects describe` in phase 4 and `gcloud beta services
+    # identity create` in phase 5; if beta isn't installed, gcloud prompts
+    # on stdin to install it. With our stderr-suppressed gcloud calls that
+    # prompt is invisible AND it eats the user's input intended for later
+    # `read -rp` prompts — the bootstrap appears to deadlock. Force-install
+    # here, before either call runs.
+    if gcloud components list --filter='id=beta' \
+            --format='value(state.name)' 2>/dev/null | grep -q "Installed"; then
+        ok "gcloud beta component: installed"
+    else
+        say "gcloud beta component is not installed. Installing (one-time, ~30s)..."
+        if gcloud components install beta --quiet </dev/null; then
+            ok "gcloud beta component installed."
+        else
+            err "Could not auto-install the gcloud beta component."
+            echo "  Install it manually and re-run this script:"
+            echo "    gcloud components install beta             # tarball installs"
+            echo "    sudo apt-get install google-cloud-cli-beta # apt installs"
+            echo "    sudo snap install google-cloud-cli-beta    # snap installs"
+            echo "  This component is required for billing checks and Vertex AI"
+            echo "  service-identity provisioning later in the bootstrap."
+            exit 1
+        fi
+    fi
     hr
 }
 
@@ -265,10 +291,12 @@ phase_4_project() {
     gcloud config set project "$PROJECT_ID" --quiet
     ok "gcloud default project set to $PROJECT_ID"
 
-    # Check billing
+    # Check billing. Phase 2 guaranteed `beta` is installed, but redirect
+    # stdin to /dev/null defensively so any future gcloud prompt gets EOF
+    # rather than eating input meant for later `read -rp` calls.
     local billing
     billing=$(gcloud beta billing projects describe "$PROJECT_ID" \
-        --format='value(billingEnabled)' 2>/dev/null || echo "")
+        --format='value(billingEnabled)' </dev/null 2>/dev/null || echo "")
     if [[ "$billing" != "True" ]]; then
         err "Billing is not enabled on project $PROJECT_ID."
         echo "  Link a billing account with:"
@@ -308,34 +336,10 @@ phase_5_bootstrap_apis() {
     echo "Ensuring Vertex AI service identity exists in $FORUM_PROJECT_ID"
     echo "(needed for cross-project IAM in terraform; idempotent)."
 
-    # `services identity create` only exists in the `beta` component. If
-    # beta isn't installed, plain `gcloud beta ...` prompts on stdin to
-    # install it — which deadlocks against the `read` prompts in later
-    # phases. Pre-install (or warn) before invoking the beta command.
-    if ! gcloud components list --filter='id=beta' \
-            --format='value(state.name)' 2>/dev/null | grep -q "Installed"; then
-        echo "  Installing gcloud beta component (one-time, ~30s)..."
-        if ! gcloud components install beta --quiet </dev/null; then
-            warn "Could not auto-install the gcloud beta component."
-            warn "  Install it manually and re-run this script:"
-            warn "    gcloud components install beta        # tarball installs"
-            warn "    sudo apt-get install google-cloud-cli-beta   # apt installs"
-            warn "  Skipping Vertex AI service identity provisioning for now."
-            warn "  If terraform apply later fails with 'principal does not"
-            warn "  exist' on engine_token_creator or engine_staging_reader,"
-            warn "  install beta, run the gcloud beta command shown below,"
-            warn "  then re-run terraform apply:"
-            warn "    gcloud beta services identity create \\"
-            warn "      --service=aiplatform.googleapis.com \\"
-            warn "      --project=$FORUM_PROJECT_ID"
-            hr
-            return 0
-        fi
-    fi
-
     # Defensive: redirect stdin to /dev/null so any unexpected future
     # prompt from gcloud gets EOF and bails out instead of silently
     # eating input that the user is typing for our `read` prompts.
+    # (Phase 2 already verified the `beta` component is installed.)
     if gcloud beta services identity create \
             --service=aiplatform.googleapis.com \
             --project="$FORUM_PROJECT_ID" </dev/null; then
