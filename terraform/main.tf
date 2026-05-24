@@ -158,6 +158,28 @@ resource "google_project_organization_policy" "allow_sa_key_creation" {
   }
 }
 
+# The Reasoning Engine lands in the Forum's project but RUNS AS this
+# agent's per-agent SA. Cross-project SA usage is blocked by default on
+# orgs created after Sep 2024 (constraint defaults to enforced). Override
+# it at the project level so the per-agent SA can be attached as the
+# runtime SA of an engine in another project. Without this, deploys
+# create the engine successfully but every metadata-server token request
+# at runtime returns 500.
+#
+# Companion override: `allow_cross_project_sa_usage` below disables the
+# same constraint on the Forum's project (where the engine resource is
+# created). Both sides need the override — this one releases the SA's
+# home project; the Forum-side one releases the project where the SA
+# is being attached.
+resource "google_project_organization_policy" "allow_cross_project_sa" {
+  project    = var.project_id
+  constraint = "constraints/iam.disableCrossProjectServiceAccountUsage"
+
+  boolean_policy {
+    enforced = false
+  }
+}
+
 # Allow cross-project service account usage in the Forum's project.
 #
 # By default GCP enforces `constraints/iam.disableCrossProjectServiceAccountUsage`
