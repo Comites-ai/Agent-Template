@@ -356,20 +356,26 @@ phase_5_bootstrap_apis() {
     fi
 
     # Heads-up about the other Forum-project IAM roles terraform needs.
-    # We don't pre-check them (no clean idempotent gcloud test for IAM
-    # membership without listing the whole policy), but flag them now so
-    # the operator isn't surprised if `terraform apply` fails later.
+    # We don't pre-check this (no clean idempotent gcloud test for IAM
+    # membership without listing the whole policy), but flag it now so
+    # the operator isn't surprised if \`terraform apply\` fails later.
     echo
-    echo "Heads-up: \`terraform apply\` later will also need TWO additional"
-    echo "roles on $FORUM_PROJECT_ID (the Forum's project):"
-    echo "  - roles/orgpolicy.policyAdmin             (to disable cross-project SA usage)"
+    echo "Heads-up: \`terraform apply\` later will need this role on"
+    echo "$FORUM_PROJECT_ID (the Forum's project):"
     echo "  - roles/resourcemanager.projectIamAdmin   (to grant the per-agent SA"
     echo "                                             its runtime roles — without these,"
     echo "                                             the engine deploys but 500s on first call)"
-    echo "If you lack either, terraform will fail with PERMISSION_DENIED on"
-    echo "allow_cross_project_sa_usage / engine_runtime_roles[...] — ask the"
-    echo "Forum's admin to grant them or apply those bindings by hand (the"
-    echo "exact gcloud commands are in terraform/main.tf next to each resource)."
+    echo "If you lack it, terraform will fail with PERMISSION_DENIED on"
+    echo "engine_runtime_roles[...] — ask the Forum's admin to grant it or"
+    echo "apply those bindings by hand (the exact gcloud commands are in"
+    echo "terraform/main.tf next to engine_runtime_roles)."
+    echo
+    echo "Also: the Forum's project needs the org policy"
+    echo "constraints/iam.disableCrossProjectServiceAccountUsage disabled."
+    echo "That policy belongs in the Forum's own terraform, not this repo —"
+    echo "see AGENTS.md rule #3 for the snippet to give the Forum operator if"
+    echo "it isn't already in place. If it's missing, the failure mode is an"
+    echo "engine that deploys cleanly and then 500s on the first user message."
     hr
 }
 

@@ -161,16 +161,19 @@ resource "google_project_organization_policy" "allow_sa_key_creation" {
 # The Reasoning Engine lands in the Forum's project but RUNS AS this
 # agent's per-agent SA. Cross-project SA usage is blocked by default on
 # orgs created after Sep 2024 (constraint defaults to enforced). Override
-# it at the project level so the per-agent SA can be attached as the
-# runtime SA of an engine in another project. Without this, deploys
-# create the engine successfully but every metadata-server token request
-# at runtime returns 500.
+# it on THIS project (the SA's home) so the per-agent SA can be attached
+# as the runtime SA of an engine in another project.
 #
-# Companion override: `allow_cross_project_sa_usage` below disables the
-# same constraint on the Forum's project (where the engine resource is
-# created). Both sides need the override — this one releases the SA's
-# home project; the Forum-side one releases the project where the SA
-# is being attached.
+# The constraint enforces on BOTH sides, so the Forum's project also needs
+# the same override. That companion override lives in the Forum's own
+# terraform — not in this repo, because the agent template shouldn't
+# manage org policies on a project it doesn't own. See AGENTS.md rule #3
+# for the exact snippet to give the Forum operator.
+#
+# Skipping either override (this one or the Forum-side one) produces the
+# same failure: `adk deploy agent_engine` creates the Reasoning Engine
+# cleanly, then every metadata-server token request at runtime returns
+# 500 and the engine never serves a single user message.
 resource "google_project_organization_policy" "allow_cross_project_sa" {
   project    = var.project_id
   constraint = "constraints/iam.disableCrossProjectServiceAccountUsage"
@@ -180,45 +183,19 @@ resource "google_project_organization_policy" "allow_cross_project_sa" {
   }
 }
 
-# Allow cross-project service account usage in the Forum's project.
+# NOTE — the COMPANION Forum-side override is NOT in this repo.
+# `iam.disableCrossProjectServiceAccountUsage` enforces on both sides of
+# cross-project SA usage: this repo's `allow_cross_project_sa` resource (above)
+# releases the agent's own project (the SA's home), but the Forum project also
+# needs the same override to accept the external SA at attach time. That second
+# override lives in the Forum's own terraform — see AGENTS.md rule #3 for the
+# exact snippet to add there. We don't manage it from this repo because cross-
+# project org-policy resources should be owned by whoever owns the project they
+# target (the Forum operator), not by every agent that reaches into the Forum.
 #
-# By default GCP enforces `constraints/iam.disableCrossProjectServiceAccountUsage`
-# org-wide (no explicit policy = default enforced = true). That blocks Vertex AI
-# Agent Engine in the Forum's project from being told to run as a service account
-# from another project — which is exactly what we do for every agent (the
-# Reasoning Engine lives in the Forum's project but runs as the per-agent SA from
-# the agent's own project, set via .agent_engine_config.json's service_account
-# field). Without this override, `adk deploy agent_engine` fails at the IAM check.
-#
-# We override the constraint at the Forum's project level (not the agent's
-# project — the constraint is enforced where the SA is being USED, which is
-# wherever the Reasoning Engine is created, i.e. the Forum's project).
-#
-# IMPORTANT — this policy is shared infrastructure between every agent that
-# deploys to the Forum's project. The first agent's terraform creates it; every
-# subsequent agent's terraform produces a no-op apply because the policy is
-# already in the desired state. But `terraform destroy` on this agent's project
-# WILL revert the policy, breaking every OTHER agent that depends on it. If
-# you're tearing down an agent and others still exist, comment this resource
-# out before destroying. (The longer-term fix is to move this policy into the
-# Forum's own terraform; for the template we keep it here so the very first
-# agent setup against a fresh Forum project works without touching the Forum
-# repo.)
-#
-# Required role on the operator: `roles/orgpolicy.policyAdmin` on the Forum
-# project. The Forum's admin typically has this. If you don't, ask them to
-# run the equivalent gcloud command once:
-#   gcloud resource-manager org-policies disable-enforce \
-#     iam.disableCrossProjectServiceAccountUsage \
-#     --project=${var.forum_project_id}
-resource "google_project_organization_policy" "allow_cross_project_sa_usage" {
-  project    = var.forum_project_id
-  constraint = "constraints/iam.disableCrossProjectServiceAccountUsage"
-
-  boolean_policy {
-    enforced = false
-  }
-}
+# If you're standing up the very first agent against a fresh Forum project and
+# `adk deploy agent_engine` fails with the metadata-server 500 at runtime, the
+# Forum-side override is the likely cause — ask the Forum operator to add it.
 
 # --- Staging bucket for ADK deployments ---
 # `adk deploy agent_engine` uploads the agent code here before deploying
