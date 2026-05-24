@@ -37,10 +37,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
     echo "Loading environment from ${SCRIPT_DIR}/.env..."
-    set -a
-    # shellcheck disable=SC1091
-    eval "$(grep -v '^\s*#' "${SCRIPT_DIR}/.env" | grep -v '^\s*$')"
-    set +a
+    # Parse line-by-line so unquoted values with spaces (e.g.
+    # AGENT_DISPLAY_NAME=Agent Demo) don't get re-tokenized by the shell.
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        # strip one layer of surrounding quotes if present
+        [[ "$value" == \"*\" && "$value" == *\" ]] && value="${value:1:-1}"
+        [[ "$value" == \'*\' && "$value" == *\' ]] && value="${value:1:-1}"
+        export "$key=$value"
+    done < "${SCRIPT_DIR}/.env"
 else
     echo "ERROR: .env not found at ${SCRIPT_DIR}/.env"
     echo "Run ./get_started_linux.sh to generate it, or copy .env.example to .env and edit."
