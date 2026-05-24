@@ -35,7 +35,7 @@ chat_credentials_secret_name = "my-agent-chat-credentials"
 # The project where slack-vertex-ai-middleware (The Forum) is deployed.
 # Used for cross-project IAM bindings so The Forum's Cloud Run SA can read
 # this agent's platform secrets.
-forum_project_id = "vertex-ai-middleware-prod"
+forum_project_id = "your-forum-project-id"
 
 # ==============================================================================
 # Discord (only if Section 5 is uncommented and you're using Discord)

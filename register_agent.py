@@ -25,7 +25,7 @@ Usage:
         --agent-name "My Agent" \\
         --vertex-ai-agent-id projects/PROJ/locations/REGION/reasoningEngines/ID \\
         [--tfvars terraform/terraform.tfvars] \\
-        [--firestore-project vertex-ai-middleware-prod]
+        [--firestore-project your-forum-project-id]
 
 `deploy_and_update.sh` calls this for you. You usually only invoke it
 directly if you're testing the registration step in isolation.
@@ -143,7 +143,7 @@ def build_platforms(tfvars: dict, sm_client) -> tuple[list[dict], dict]:
     agent_project = tfvars["project_id"]
     bot_account_id = tfvars["bot_account_id"]
     chat_secret_name = tfvars.get("chat_credentials_secret_name")
-    forum_project = tfvars.get("forum_project_id", "vertex-ai-middleware-prod")
+    forum_project = tfvars.get("forum_project_id", "your-forum-project-id")
     discord_app_id = tfvars.get("discord_application_id", "")
 
     slack_secret = f"{bot_account_id}-slack-token"
@@ -223,8 +223,8 @@ def main():
                         help="Full Reasoning Engine resource name from `adk deploy`")
     parser.add_argument("--tfvars", default=None,
                         help="Path to terraform.tfvars (default: terraform/terraform.tfvars next to this script)")
-    parser.add_argument("--firestore-project", default="vertex-ai-middleware-prod",
-                        help="Project hosting The Forum's Firestore (default: vertex-ai-middleware-prod)")
+    parser.add_argument("--firestore-project", default="your-forum-project-id",
+                        help="Project hosting The Forum's Firestore (default: your-forum-project-id)")
     args = parser.parse_args()
 
     tfvars_path = Path(args.tfvars) if args.tfvars else Path(__file__).parent / "terraform" / "terraform.tfvars"

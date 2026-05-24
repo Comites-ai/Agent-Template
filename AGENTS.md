@@ -56,7 +56,7 @@ The **Forum-side override** is the Forum operator's responsibility and belongs i
 # Without disabling this constraint, those cross-project SAs cannot be
 # attached at runtime and the engine 500s on every metadata token request.
 resource "google_project_organization_policy" "allow_cross_project_sa_runtime" {
-  project    = "vertex-ai-middleware-prod"  # or whatever variable the Forum uses
+  project    = "your-forum-project-id"  # or whatever variable the Forum uses
   constraint = "constraints/iam.disableCrossProjectServiceAccountUsage"
 
   boolean_policy {
@@ -90,7 +90,7 @@ Don't add platform entries directly in the Firestore Console. They'll be overwri
 
 ### 6. User IDs are names — not platform IDs
 
-The Forum sends the user's actual name (e.g. `"Jonathan Cavell"`) as `user_id` to the agent, and prefixes incoming messages with `[From: Name]` (or `[From: Name | platform_id: ...]` for scheduled jobs). Your agent should treat `user_id` as a human name, not a Slack `U...` ID, Telegram numeric ID, etc. This is how cross-platform identity works: the same person on Slack and Telegram gets the same `user_id`.
+The Forum sends the user's actual name (e.g. `"Alice Chen"`) as `user_id` to the agent, and prefixes incoming messages with `[From: Name]` (or `[From: Name | platform_id: ...]` for scheduled jobs). Your agent should treat `user_id` as a human name, not a Slack `U...` ID, Telegram numeric ID, etc. This is how cross-platform identity works: the same person on Slack and Telegram gets the same `user_id`.
 
 ### 7. The scheduler MCP URL must have a trailing slash
 
