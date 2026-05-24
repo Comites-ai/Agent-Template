@@ -34,6 +34,7 @@ What this module is NOT
   one-shot calls suitable for memory documents under a few thousand
   words. For larger docs, use the Docs API directly.
 """
+import os
 from typing import Any, Dict, Optional
 
 import google.auth
@@ -64,10 +65,20 @@ class GoogleDocsConnector:
     def __init__(self, credentials: Optional[Credentials] = None):
         if credentials is None:
             # ADC: returns whichever identity is configured in the runtime
-            # environment (compute SA on Reasoning Engine, gcloud user
+            # environment (per-agent SA on Reasoning Engine, gcloud user
             # locally). The returned project_id is ignored — Docs API
             # doesn't care about project.
             credentials, _ = google.auth.default(scopes=_DOCS_SCOPES)
+            # Bill Docs API calls to the agent's own project (where the
+            # Docs API is enabled by terraform), not the Forum project
+            # where the engine runs. The Forum doesn't enable Workspace
+            # APIs — without this override, calls fail with
+            # USER_PROJECT_DENIED. Scoped to this client only so Vertex
+            # AI / Firestore / Secret Manager keep their default quota
+            # project, which is correct for them.
+            agent_project = os.environ.get("AGENT_PROJECT_ID")
+            if agent_project:
+                credentials = credentials.with_quota_project(agent_project)
         self._credentials = credentials
         self._docs_service = build("docs", "v1", credentials=credentials)
 
