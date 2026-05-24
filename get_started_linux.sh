@@ -307,21 +307,49 @@ phase_5_bootstrap_apis() {
     echo
     echo "Ensuring Vertex AI service identity exists in $FORUM_PROJECT_ID"
     echo "(needed for cross-project IAM in terraform; idempotent)."
+
+    # `services identity create` only exists in the `beta` component. If
+    # beta isn't installed, plain `gcloud beta ...` prompts on stdin to
+    # install it — which deadlocks against the `read` prompts in later
+    # phases. Pre-install (or warn) before invoking the beta command.
+    if ! gcloud components list --filter='id=beta' \
+            --format='value(state.name)' 2>/dev/null | grep -q "Installed"; then
+        echo "  Installing gcloud beta component (one-time, ~30s)..."
+        if ! gcloud components install beta --quiet </dev/null; then
+            warn "Could not auto-install the gcloud beta component."
+            warn "  Install it manually and re-run this script:"
+            warn "    gcloud components install beta        # tarball installs"
+            warn "    sudo apt-get install google-cloud-cli-beta   # apt installs"
+            warn "  Skipping Vertex AI service identity provisioning for now."
+            warn "  If terraform apply later fails with 'principal does not"
+            warn "  exist' on engine_token_creator or engine_staging_reader,"
+            warn "  install beta, run the gcloud beta command shown below,"
+            warn "  then re-run terraform apply:"
+            warn "    gcloud beta services identity create \\"
+            warn "      --service=aiplatform.googleapis.com \\"
+            warn "      --project=$FORUM_PROJECT_ID"
+            hr
+            return 0
+        fi
+    fi
+
+    # Defensive: redirect stdin to /dev/null so any unexpected future
+    # prompt from gcloud gets EOF and bails out instead of silently
+    # eating input that the user is typing for our `read` prompts.
     if gcloud beta services identity create \
-        --service=aiplatform.googleapis.com \
-        --project="$FORUM_PROJECT_ID" 2>&1 | tee /tmp/svc_identity_out.log; then
+            --service=aiplatform.googleapis.com \
+            --project="$FORUM_PROJECT_ID" </dev/null; then
         ok "Vertex AI service identity ready in $FORUM_PROJECT_ID."
     else
         warn "Could not provision Vertex AI service identity in $FORUM_PROJECT_ID."
-        warn "  This usually means you lack roles/serviceusage.serviceUsageAdmin on"
-        warn "  the Forum's project. If terraform apply later fails with a"
+        warn "  This usually means you lack roles/serviceusage.serviceUsageAdmin"
+        warn "  on the Forum's project. If terraform apply later fails with a"
         warn "  'principal does not exist' error on engine_token_creator or"
         warn "  engine_staging_reader, ask the Forum's admin to run:"
         warn "    gcloud beta services identity create \\"
         warn "      --service=aiplatform.googleapis.com \\"
         warn "      --project=$FORUM_PROJECT_ID"
     fi
-    rm -f /tmp/svc_identity_out.log
     hr
 }
 
