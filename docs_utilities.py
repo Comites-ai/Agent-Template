@@ -118,7 +118,9 @@ class GoogleDocsConnector:
         # Find the current end-of-body index. Docs always reserves index 1
         # for the document start; the trailing newline at end_index is
         # part of the body and can't be deleted, so we delete up to
-        # end_index - 1.
+        # end_index - 1. An empty doc reports end_index = 2 (just the
+        # undeletable newline) — skip the delete in that case, since a
+        # (1, 1) range is rejected as empty by the Docs API.
         doc = self._docs_service.documents().get(documentId=document_id).execute()
         body_content = doc.get("body", {}).get("content", [])
         end_index = 1
@@ -127,7 +129,7 @@ class GoogleDocsConnector:
                 end_index = element["endIndex"]
 
         requests = []
-        if end_index > 1:
+        if end_index > 2:
             requests.append({
                 "deleteContentRange": {
                     "range": {"startIndex": 1, "endIndex": end_index - 1}
