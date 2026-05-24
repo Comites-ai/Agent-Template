@@ -524,6 +524,15 @@ EOF
     # Vertex AI which identity the Reasoning Engine should run as. Without
     # this substitution, the deployed engine would inherit the Forum's
     # shared compute SA and per-agent isolation would break.
+    #
+    # CRITICAL: do NOT add comment fields (e.g. "_comment_1") to this JSON.
+    # ADK validates it through `AgentEngineConfig`, a Pydantic model with
+    # extra=forbid, so any unknown key fails the deploy at validation time
+    # with a confusing error long before reaching the Vertex AI API. The
+    # file must contain ONLY fields ADK recognizes — currently just
+    # `service_account`. If you want to add another field, check the ADK
+    # source first: src/google/adk/cli/cli_deploy.py and the underlying
+    # `agent_engines.create(config=...)` schema.
     local engine_config="$REPO_ROOT/.agent_engine_config.json"
     if [[ -f "$engine_config" ]]; then
         local agent_sa="${BOT_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
