@@ -74,7 +74,17 @@ Open Telegram on your phone or desktop:
 
 Keep the BotFather chat open — you'll use `/deletebot` for cleanup in Step 9.
 
-### Step 3: Run `get_started_linux.sh`
+### Step 3a: Create a Google Doc for memory
+
+The stub agent exercises the persistent-memory tools on every message (reads at the start, writes at the end), so the smoke test now also validates the per-agent SA's access to a Google Doc. You need a doc ready before running the bootstrap.
+
+1. Open https://docs.google.com → **Blank document**.
+2. Title it `Smoke Test Agent Memory`.
+3. Copy the doc ID from the URL — the long alphanumeric string between `/d/` and `/edit`.
+
+Keep this browser tab open — you'll share the doc with the per-agent SA after Step 3 finishes.
+
+### Step 3b: Run `get_started_linux.sh`
 
 ```bash
 ./get_started_linux.sh
@@ -89,7 +99,8 @@ Answer the prompts:
 - Region: `us-central1` (or whatever matches The Forum).
 - Models: defaults are fine.
 - Platforms: type `telegram` (Telegram only for this smoke test).
-- Memory doc: skip (`n`) for this test.
+- **Wire up a Google Doc for persistent memory?** `y` (the default).
+- **Google Doc ID:** paste the ID from Step 3a.
 - Run `terraform apply` now: **yes**.
 - When prompted for the Telegram bot token: paste the token from @BotFather.
 
@@ -110,6 +121,20 @@ The script should:
 **Expected end state**: `README.md` now starts with `# Smoke Test Agent`; `test.md`, `MAINTAINER_SETUP.md`, `tests/`, and `get_started_linux.sh` no longer exist; `terraform/terraform.tfvars` and `.env` are present and populated.
 
 If any step fails, the script should exit with a clear error and leave you in a recoverable state.
+
+### Step 3c: Share the memory doc with the per-agent SA
+
+`get_started_linux.sh` printed (in its Phase 12 output and again in Phase 15's "Next steps") the email address of the per-agent service account — the identity the Reasoning Engine actually runs as. For the smoke test it will be `smoke-test-agent@<test-project>.iam.gserviceaccount.com`.
+
+Back in the browser tab from Step 3a:
+
+1. Click **Share** (top right).
+2. Add the per-agent SA email (paste from the bootstrap output).
+3. Set access to **Editor**.
+4. **Uncheck "Notify people"** — the SA can't read email.
+5. Click **Share**.
+
+If you skip this step, the stub's first message will succeed at calling `get_agent_memory` only to get a 403, and you'll see the agent mention that its memory is not accessible. That outcome still validates most of the pipeline but doesn't validate the memory architecture, which is what the rest of this test is now checking.
 
 ### Step 4: Deploy
 
@@ -174,15 +199,50 @@ Now add the webhook secret to the agent's Firestore document so The Forum can ve
 2. Tap **Start** (or send `/start` manually).
 3. Send a message: `hello`.
 
-**Expected response** (the agent introduces itself as Junius Rusticus — the historical Stoic teacher of Marcus Aurelius and the namesake inspiration for the Comites.ai project — and prompts you to replace the stub instructions). Exact wording varies per response since the model is reasoning from a persona prompt, not echoing a fixed string. A typical response will look something like:
+**Expected response** (the agent introduces itself as Junius Rusticus — the historical Stoic teacher of Marcus Aurelius and the namesake inspiration for the Comites.ai project — and prompts you to replace the stub instructions). Because the stub also exercises the persistent-memory tools on every message, the response will additionally acknowledge that this is the first interaction (or, on subsequent messages, that the agent remembers prior ones). Exact wording varies per response since the model is reasoning from a persona prompt, not echoing a fixed string. A typical first-message response looks like:
 
-> Greetings. I am Quintus Junius Rusticus — Roman Stoic, twice-consul of Rome, and the teacher who Marcus Aurelius credited in his Meditations with shaping his character. I serve as the placeholder voice of the Comites.ai Agent Template, whose name draws on the Roman tradition of trusted imperial counselors. When you are ready, replace my instructions in `agent.py` with the prompt for the agent you intend to build.
+> Greetings. I am Quintus Junius Rusticus — Roman Stoic, twice-consul of Rome, and the teacher Marcus Aurelius credited in his Meditations with shaping his character. I serve as the placeholder voice of the Comites.ai Agent Template, whose name draws on the Roman tradition of trusted imperial counselors. I have just recorded our first encounter in my notes. When you are ready, replace my instructions in `agent.py` with the prompt for the agent you intend to build.
 
-Verify the response contains all three of these elements:
+Verify the response contains all four of these elements:
 
 - The name **Junius Rusticus** (or just "Rusticus")
 - A reference to **Marcus Aurelius**
 - A reference to **Comites.ai** (or just "Comites" / "comes")
+- A reference to memory ("recording," "first encounter," "in my notes," or similar)
+
+### Step 7b: Verify memory was actually written
+
+Open the Google Doc you created in Step 3a. After Step 7, the doc should now contain something like:
+
+```
+Memory of Junius Rusticus (Comites.ai Agent Template stub persona)
+
+Total interactions: 1
+First met: 2026-05-24
+Most recent: 2026-05-24
+
+Recent messages (most recent first, last 5):
+- 2026-05-24: User sent "hello".
+```
+
+If the doc still appears blank, possible causes:
+
+- You skipped Step 3c (sharing the doc with the per-agent SA). Look at the Reasoning Engine logs:
+  ```bash
+  gcloud logging read \
+    'resource.type="aiplatform.googleapis.com/ReasoningEngine"' \
+    --project=<FORUM_PROJECT_ID> --limit=20
+  ```
+  A `PERMISSION_DENIED` from `docs.googleapis.com` confirms the doc isn't shared with the right SA.
+- The model returned text without calling tools. Bump `HIGH_QUALITY_AGENT_MODEL` in `.env` to `gemini-2.5-pro` and redeploy — flash models occasionally skip required tool calls when the prompt is long.
+
+### Step 7c: Send a second message and verify the count updates
+
+```
+(in Telegram) hello again
+```
+
+The Google Doc should now read `Total interactions: 2` and have both messages listed under "Recent messages." That confirms the read-modify-write cycle is working, not just a one-shot write.
 
 If all three appear, the template works end-to-end. ✅ If the response is missing one of them, the model is probably ignoring parts of the prompt — try a higher-quality model in `HIGH_QUALITY_AGENT_MODEL` (`gemini-2.5-pro` is a safe choice) and redeploy.
 

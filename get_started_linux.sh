@@ -907,14 +907,17 @@ phase_11_apply() {
 phase_12_memory_doc() {
     say "Phase 12: Persistent memory via Google Doc (recommended)"
     echo "Your agent comes with memory tools (get_agent_memory and"
-    echo "update_agent_memory) already wired into root_agent.tools. They"
-    echo "need a Google Doc to read from and write to — without one, the"
-    echo "tools will raise a clear error if the model ever calls them."
+    echo "update_agent_memory) already wired into root_agent.tools, AND"
+    echo "the default Junius Rusticus stub exercises them on every"
+    echo "message (reads at the start, writes a running log at the end)."
+    echo "That makes the first deploy a real smoke test for memory —"
+    echo "after the first DM, the Google Doc will have content in it,"
+    echo "proving the per-agent SA can read and write the doc."
     echo
-    echo "If you skip this, the stub greeting still works (the stub doesn't"
-    echo "call the memory tools) — but you'll need to either configure"
-    echo "AGENT_MEMORY_DOC_ID later, or remove the memory tools from"
-    echo "agent.py before your real prompt starts using them."
+    echo "If you skip this, the stub will still respond on first deploy,"
+    echo "but it will note that its memory is not accessible (a 403 from"
+    echo "the Docs API). You can configure AGENT_MEMORY_DOC_ID later, or"
+    echo "remove the memory tools and the memory steps from agent.py."
     echo
 
     if ! prompt_yn "Wire up a Google Doc for persistent memory?" y; then
@@ -929,9 +932,11 @@ phase_12_memory_doc() {
     echo "       https://docs.google.com/document/d/AAAA111122223333.../edit"
     echo "     The ID is the part between /d/ and /edit."
     echo
-    local doc_id
-    read -rp "  Google Doc ID: " doc_id
-    if [[ -z "$doc_id" ]]; then
+    # MEMORY_DOC_ID is script-level (not local) so phase 15's next-steps
+    # block can detect whether memory was wired up and remind the user
+    # to share the doc with the per-agent SA.
+    read -rp "  Google Doc ID: " MEMORY_DOC_ID
+    if [[ -z "$MEMORY_DOC_ID" ]]; then
         warn "  Empty input — skipping."
         hr
         return 0
@@ -939,11 +944,11 @@ phase_12_memory_doc() {
 
     # Append to .env (or replace if already there)
     if grep -qE '^AGENT_MEMORY_DOC_ID=' "$REPO_ROOT/.env"; then
-        sed -i.bak -E "s|^AGENT_MEMORY_DOC_ID=.*|AGENT_MEMORY_DOC_ID=$doc_id|" "$REPO_ROOT/.env"
+        sed -i.bak -E "s|^AGENT_MEMORY_DOC_ID=.*|AGENT_MEMORY_DOC_ID=$MEMORY_DOC_ID|" "$REPO_ROOT/.env"
         rm -f "$REPO_ROOT/.env.bak"
     else
         echo "" >> "$REPO_ROOT/.env"
-        echo "AGENT_MEMORY_DOC_ID=$doc_id" >> "$REPO_ROOT/.env"
+        echo "AGENT_MEMORY_DOC_ID=$MEMORY_DOC_ID" >> "$REPO_ROOT/.env"
     fi
     ok "  AGENT_MEMORY_DOC_ID set in .env."
 
@@ -1139,6 +1144,27 @@ ${BOLD}[ ] Provision the scheduler MCP key${NC}
            --data-file=- --project=$PROJECT_ID
     5. Uncomment the scheduler_toolset block in agent.py and add it to
        root_agent.tools. Re-deploy.
+
+EOF
+    fi
+
+    if [[ -n "${MEMORY_DOC_ID:-}" ]]; then
+        local memory_sa_email="${BOT_ACCOUNT_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
+        cat <<EOF
+${BOLD}[ ] Share the memory Google Doc with your agent's runtime SA${NC}
+    1. Open: https://docs.google.com/document/d/${MEMORY_DOC_ID}/edit
+    2. Click "Share" (top right).
+    3. Add this email (the SA the Reasoning Engine runs as):
+         ${BOLD}${memory_sa_email}${NC}
+    4. Set access to "Editor".
+    5. Uncheck "Notify people" (the SA can't read email) and click Share.
+
+    Until this is done, get_agent_memory / update_agent_memory will
+    fail with a 403 the first time the model calls them — and since the
+    default Junius Rusticus stub calls them on every message, the first
+    DM will produce a response that explicitly mentions its memory is
+    not accessible. Share the doc and the same DM will instead write a
+    running log into the doc.
 
 EOF
     fi
