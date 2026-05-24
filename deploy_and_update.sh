@@ -160,7 +160,6 @@ DEPLOY_OUTPUT=$(cd "$AGENT_PARENT_DIR" && "$ADK_BIN" deploy agent_engine \
     --region "$REGION" \
     --staging_bucket "gs://${AGENT_PROJECT_ID}-staging" \
     --display_name "$AGENT_DISPLAY_NAME" \
-    --trace_to_cloud \
     --agent_engine_config_file "${AGENT_DIR}/.agent_engine_config.json" \
     "$AGENT_PACKAGE_NAME" 2>&1) || {
     err "Deployment failed!"
