@@ -315,7 +315,7 @@ locals {
     "roles/aiplatform.user",         # invoke Vertex AI APIs at runtime
     "roles/logging.logWriter",       # emit stdout/stderr to Cloud Logging
     "roles/monitoring.metricWriter", # emit container metrics
-    "roles/cloudtrace.agent",        # emit traces (deploy uses --trace_to_cloud)
+    "roles/cloudtrace.agent",        # emit traces. NOTE: --trace_to_cloud was removed from deploy_and_update.sh (commit b5adf67) because it triggers a metadata-proxy scope bug with cross-project SAs. We keep this role granted so re-enabling tracing later is a one-line change; remove if you've decided you'll never use it.
   ])
 }
 
