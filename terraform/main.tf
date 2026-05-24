@@ -226,6 +226,47 @@ resource "google_storage_bucket_iam_member" "engine_staging_reader" {
   member = "serviceAccount:${local.forum_vertex_ai_service_agent}"
 }
 
+# --- Per-agent SA roles on the Forum project ---
+#
+# The Reasoning Engine runs in the Forum project AS the per-agent SA. For
+# the engine to start and serve traffic, that SA needs baseline workload
+# roles on the Forum project — without them, the runtime metadata server
+# returns 500 on the first token request and the engine never reaches its
+# first user message (no useful log line, just a hung first reply).
+# These are the same roles the Forum's default compute SA has, which is
+# why the old shared-SA setup "just worked" — the per-agent SA inherits
+# nothing automatically when it moves to the Forum project.
+#
+# The local lives next to the resource (rather than with the other locals
+# at the top of the file) because the set is specifically tied to this
+# one binding — easier to maintain together when adding/removing roles.
+#
+# Operator IAM requirement: the user running `terraform apply` needs
+# `roles/resourcemanager.projectIamAdmin` on the Forum project to grant
+# these. If you don't, terraform fails here with a clear PERMISSION_DENIED
+# — ask the Forum's admin to grant the bindings manually with:
+#   for role in roles/aiplatform.user roles/logging.logWriter \
+#               roles/monitoring.metricWriter roles/cloudtrace.agent; do
+#     gcloud projects add-iam-policy-binding ${var.forum_project_id} \
+#       --member="serviceAccount:${var.bot_account_id}@${var.project_id}.iam.gserviceaccount.com" \
+#       --role="$role"
+#   done
+locals {
+  forum_runtime_roles_for_agent_sa = toset([
+    "roles/aiplatform.user",         # invoke Vertex AI APIs at runtime
+    "roles/logging.logWriter",       # emit stdout/stderr to Cloud Logging
+    "roles/monitoring.metricWriter", # emit container metrics
+    "roles/cloudtrace.agent",        # emit traces (deploy uses --trace_to_cloud)
+  ])
+}
+
+resource "google_project_iam_member" "engine_runtime_roles" {
+  for_each = local.forum_runtime_roles_for_agent_sa
+  project  = var.forum_project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.agent.email}"
+}
+
 # ==============================================================================
 # SECTION 2: SLACK
 # Uncomment to enable Slack. After `terraform apply`, populate the secret:

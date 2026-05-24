@@ -354,6 +354,22 @@ phase_5_bootstrap_apis() {
         warn "      --service=aiplatform.googleapis.com \\"
         warn "      --project=$FORUM_PROJECT_ID"
     fi
+
+    # Heads-up about the other Forum-project IAM roles terraform needs.
+    # We don't pre-check them (no clean idempotent gcloud test for IAM
+    # membership without listing the whole policy), but flag them now so
+    # the operator isn't surprised if `terraform apply` fails later.
+    echo
+    echo "Heads-up: \`terraform apply\` later will also need TWO additional"
+    echo "roles on $FORUM_PROJECT_ID (the Forum's project):"
+    echo "  - roles/orgpolicy.policyAdmin             (to disable cross-project SA usage)"
+    echo "  - roles/resourcemanager.projectIamAdmin   (to grant the per-agent SA"
+    echo "                                             its runtime roles — without these,"
+    echo "                                             the engine deploys but 500s on first call)"
+    echo "If you lack either, terraform will fail with PERMISSION_DENIED on"
+    echo "allow_cross_project_sa_usage / engine_runtime_roles[...] — ask the"
+    echo "Forum's admin to grant them or apply those bindings by hand (the"
+    echo "exact gcloud commands are in terraform/main.tf next to each resource)."
     hr
 }
 
