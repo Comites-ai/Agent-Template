@@ -42,13 +42,25 @@ locals {
   # The Forum's Cloud Run runs as the project's default compute SA.
   forum_runtime_sa = "${data.google_project.forum.number}-compute@developer.gserviceaccount.com"
 
-  # Vertex AI Reasoning Engine Service Agent in the Forum project. When
-  # this agent is deployed (via deploy_and_update.sh, which lands the
-  # Reasoning Engine in the Forum's project), this service agent is the
-  # principal Vertex AI uses to mint short-lived credentials for the
-  # runtime SA. It needs `roles/iam.serviceAccountTokenCreator` on the
-  # per-agent SA, granted below as `engine_token_creator`.
-  forum_vertex_ai_service_agent = "service-${data.google_project.forum.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+  # Three Vertex AI service agents in the Forum project all need to mint
+  # tokens for the per-agent SA at different phases of the engine lifecycle:
+  #   - gcp-sa-aiplatform        — general AI Platform control plane
+  #   - gcp-sa-aiplatform-re     — Reasoning Engine resource management
+  #   - gcp-sa-aiplatform-cc     — runs the workload CONTAINER and emulates
+  #                                the metadata server inside it. This is
+  #                                the one whose missing binding manifests
+  #                                as the cryptic "Compute Engine Metadata
+  #                                server unavailable. Response status: 500"
+  #                                at engine startup. The other two pass
+  #                                preflight without it.
+  # All three are auto-provisioned by `gcloud beta services identity create
+  # --service=aiplatform.googleapis.com` (one call provisions all sub-agents),
+  # which the bootstrap runs in phase 5.
+  forum_vertex_ai_service_agents = toset([
+    "service-${data.google_project.forum.number}@gcp-sa-aiplatform.iam.gserviceaccount.com",
+    "service-${data.google_project.forum.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com",
+    "service-${data.google_project.forum.number}@gcp-sa-aiplatform-cc.iam.gserviceaccount.com",
+  ])
 }
 
 # --- APIs ---
@@ -81,12 +93,14 @@ resource "google_project_service" "iam" {
 
 # IAM Credentials API — required to mint short-lived tokens for service
 # accounts, including the cross-project SA impersonation that Vertex
-# AI's Reasoning Engine Service Agent does to run our per-agent SA as
-# the engine's runtime identity. Without this enabled, terraform's
-# `engine_token_creator` binding succeeds but the actual token-minting
-# call at runtime fails with a "Resource not found" / "API not enabled"
-# error — manifesting as a Reasoning Engine that deploys cleanly and
-# then 500s on its first invocation.
+# AI's service agents do to run our per-agent SA as the engine's
+# runtime identity. (Three service agents are involved at different
+# phases — see the `forum_vertex_ai_service_agents` local above.)
+# Without this enabled, terraform's `engine_token_creator` bindings
+# succeed but the actual token-minting calls at runtime fail with a
+# "Resource not found" / "API not enabled" error — manifesting as a
+# Reasoning Engine that deploys cleanly and then 500s on its first
+# invocation.
 resource "google_project_service" "iamcredentials" {
   project            = var.project_id
   service            = "iamcredentials.googleapis.com"
@@ -233,22 +247,28 @@ resource "google_storage_bucket" "staging" {
 #
 # The Reasoning Engine lands in the Forum's project but RUNS AS this
 # agent's per-agent SA (configured via .agent_engine_config.json's
-# `service_account` field). For Vertex AI to assume the per-agent SA's
-# identity at runtime, the Vertex AI Reasoning Engine Service Agent in
-# the Forum project needs:
+# `service_account` field). Three Vertex AI service agents in the Forum
+# project participate at different phases of the engine lifecycle (see
+# the `forum_vertex_ai_service_agents` local at the top of this file);
+# each needs:
 #
 #   1. Permission to mint tokens for the per-agent SA
 #      (`roles/iam.serviceAccountTokenCreator` on the SA itself).
 #   2. Permission to read the packaged agent code from this staging
 #      bucket (`roles/storage.objectViewer` on the bucket).
 #
-# Without these, the deploy succeeds but the engine fails to start with
-# a permission-denied error at first invocation.
+# The bindings below fan out to all three with a for_each. The most
+# load-bearing one is the -cc agent (custom container runtime); if its
+# binding is missing the engine deploys cleanly and then 500s on the
+# first invocation with "Compute Engine Metadata server unavailable.
+# Response status: 500" — a failure mode that the other two would pass
+# preflight without surfacing.
 
 resource "google_service_account_iam_member" "engine_token_creator" {
+  for_each           = local.forum_vertex_ai_service_agents
   service_account_id = google_service_account.agent.name
   role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "serviceAccount:${local.forum_vertex_ai_service_agent}"
+  member             = "serviceAccount:${each.value}"
 
   # The binding succeeds without iamcredentials.googleapis.com, but the
   # token-minting call at runtime won't — depend on the API explicitly so
@@ -257,9 +277,14 @@ resource "google_service_account_iam_member" "engine_token_creator" {
 }
 
 resource "google_storage_bucket_iam_member" "engine_staging_reader" {
-  bucket = google_storage_bucket.staging.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${local.forum_vertex_ai_service_agent}"
+  # Granted to all three service agents (not just -re) as cheap insurance
+  # against the same "wrong service agent" guess that bit us on the token-
+  # creator binding. The agents are distinct GCP-managed principals; there's
+  # no extra cost or escalation surface from listing them here.
+  for_each = local.forum_vertex_ai_service_agents
+  bucket   = google_storage_bucket.staging.name
+  role     = "roles/storage.objectViewer"
+  member   = "serviceAccount:${each.value}"
 }
 
 # --- Per-agent SA roles on the Forum project ---

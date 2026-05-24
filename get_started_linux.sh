@@ -325,16 +325,29 @@ phase_5_bootstrap_apis() {
         --project="$PROJECT_ID"
     ok "Bootstrap APIs enabled in $PROJECT_ID."
 
-    # Force-provision the Vertex AI service identity in The Forum's project
-    # if it doesn't already exist. Our terraform creates an IAM binding that
-    # references `service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam
-    # .gserviceaccount.com`, which only auto-exists once Vertex AI has been
-    # used in that project. For the very first agent against a fresh Forum
-    # project, the binding would fail with "principal does not exist." This
-    # gcloud call is idempotent — no-op if the identity already exists.
+    # Force-provision the Vertex AI service identities in The Forum's project
+    # if they don't already exist. Our terraform creates IAM bindings that
+    # reference all three:
+    #   service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform.iam.gserviceaccount.com
+    #   service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com
+    #   service-${FORUM_PROJECT_NUMBER}@gcp-sa-aiplatform-cc.iam.gserviceaccount.com
+    #
+    # All three are sub-agents of the single `aiplatform.googleapis.com`
+    # service — one `gcloud beta services identity create` call provisions
+    # the whole set (per
+    # https://cloud.google.com/iam/docs/create-service-agents — "the
+    # command creates all service agents for the specified API"). There's
+    # no separate `aiplatformreasoningengine` or `aiplatformcc` API to
+    # enable — if you check `gcloud services list --available --filter=aiplatform`
+    # you'll only see the one entry.
+    #
+    # For the very first agent against a fresh Forum project, terraform's
+    # bindings would otherwise fail with "principal does not exist." The
+    # call below is idempotent — no-op if the identities already exist.
     echo
-    echo "Ensuring Vertex AI service identity exists in $FORUM_PROJECT_ID"
-    echo "(needed for cross-project IAM in terraform; idempotent)."
+    echo "Ensuring Vertex AI service identities exist in $FORUM_PROJECT_ID"
+    echo "(needed for cross-project IAM in terraform; one call provisions all"
+    echo "three sub-agents: aiplatform, aiplatform-re, aiplatform-cc)."
 
     # Defensive: redirect stdin to /dev/null so any unexpected future
     # prompt from gcloud gets EOF and bails out instead of silently
@@ -345,14 +358,15 @@ phase_5_bootstrap_apis() {
             --project="$FORUM_PROJECT_ID" </dev/null; then
         ok "Vertex AI service identity ready in $FORUM_PROJECT_ID."
     else
-        warn "Could not provision Vertex AI service identity in $FORUM_PROJECT_ID."
+        warn "Could not provision Vertex AI service identities in $FORUM_PROJECT_ID."
         warn "  This usually means you lack roles/serviceusage.serviceUsageAdmin"
         warn "  on the Forum's project. If terraform apply later fails with a"
-        warn "  'principal does not exist' error on engine_token_creator or"
-        warn "  engine_staging_reader, ask the Forum's admin to run:"
+        warn "  'principal does not exist' error on engine_token_creator[...] or"
+        warn "  engine_staging_reader[...], ask the Forum's admin to run:"
         warn "    gcloud beta services identity create \\"
         warn "      --service=aiplatform.googleapis.com \\"
         warn "      --project=$FORUM_PROJECT_ID"
+        warn "  (One call provisions all three aiplatform sub-agents.)"
     fi
 
     # Heads-up about the other Forum-project IAM roles terraform needs.
