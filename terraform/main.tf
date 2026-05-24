@@ -52,13 +52,44 @@ locals {
 }
 
 # --- APIs ---
-# Bootstrap APIs (serviceusage, cloudresourcemanager, secretmanager) are
-# already enabled by get_started_linux.sh — terraform would chicken-and-egg
-# if it tried to enable them itself. The APIs below are the rest.
+# Bootstrap APIs (serviceusage, cloudresourcemanager, secretmanager,
+# and iam.googleapis.com) are already enabled by get_started_linux.sh —
+# terraform would chicken-and-egg if it tried to enable them itself
+# (e.g., google_service_account.agent below can't be created without
+# iam.googleapis.com, and terraform's own auto-enable on first SA
+# creation isn't reliable for IAM-related ops).
+#
+# The APIs below are the rest — declared as resources here so they're
+# tracked in state and so resources that need them can depends_on them.
 
 resource "google_project_service" "secretmanager" {
   project            = var.project_id
   service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+# IAM API — required by `google_service_account` and any other resource
+# that talks to the IAM control plane. Listed explicitly so the SA's
+# depends_on can reference it; without it, terraform sometimes races
+# the first SA creation against Google's auto-enable and the apply
+# fails with a confusing "service not enabled" error on the SA itself.
+resource "google_project_service" "iam" {
+  project            = var.project_id
+  service            = "iam.googleapis.com"
+  disable_on_destroy = false
+}
+
+# IAM Credentials API — required to mint short-lived tokens for service
+# accounts, including the cross-project SA impersonation that Vertex
+# AI's Reasoning Engine Service Agent does to run our per-agent SA as
+# the engine's runtime identity. Without this enabled, terraform's
+# `engine_token_creator` binding succeeds but the actual token-minting
+# call at runtime fails with a "Resource not found" / "API not enabled"
+# error — manifesting as a Reasoning Engine that deploys cleanly and
+# then 500s on its first invocation.
+resource "google_project_service" "iamcredentials" {
+  project            = var.project_id
+  service            = "iamcredentials.googleapis.com"
   disable_on_destroy = false
 }
 
@@ -107,6 +138,7 @@ resource "google_service_account" "agent" {
   description  = "Service account for ${var.bot_name} (Google APIs + platform integrations)"
 
   depends_on = [
+    google_project_service.iam,
     google_project_service.drive,
     google_project_service.sheets,
     google_project_service.docs,
@@ -218,6 +250,11 @@ resource "google_service_account_iam_member" "engine_token_creator" {
   service_account_id = google_service_account.agent.name
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "serviceAccount:${local.forum_vertex_ai_service_agent}"
+
+  # The binding succeeds without iamcredentials.googleapis.com, but the
+  # token-minting call at runtime won't — depend on the API explicitly so
+  # `terraform apply` enables it before any deploy attempts to use it.
+  depends_on = [google_project_service.iamcredentials]
 }
 
 resource "google_storage_bucket_iam_member" "engine_staging_reader" {
