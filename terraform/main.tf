@@ -126,6 +126,46 @@ resource "google_project_organization_policy" "allow_sa_key_creation" {
   }
 }
 
+# Allow cross-project service account usage in the Forum's project.
+#
+# By default GCP enforces `constraints/iam.disableCrossProjectServiceAccountUsage`
+# org-wide (no explicit policy = default enforced = true). That blocks Vertex AI
+# Agent Engine in the Forum's project from being told to run as a service account
+# from another project — which is exactly what we do for every agent (the
+# Reasoning Engine lives in the Forum's project but runs as the per-agent SA from
+# the agent's own project, set via .agent_engine_config.json's service_account
+# field). Without this override, `adk deploy agent_engine` fails at the IAM check.
+#
+# We override the constraint at the Forum's project level (not the agent's
+# project — the constraint is enforced where the SA is being USED, which is
+# wherever the Reasoning Engine is created, i.e. the Forum's project).
+#
+# IMPORTANT — this policy is shared infrastructure between every agent that
+# deploys to the Forum's project. The first agent's terraform creates it; every
+# subsequent agent's terraform produces a no-op apply because the policy is
+# already in the desired state. But `terraform destroy` on this agent's project
+# WILL revert the policy, breaking every OTHER agent that depends on it. If
+# you're tearing down an agent and others still exist, comment this resource
+# out before destroying. (The longer-term fix is to move this policy into the
+# Forum's own terraform; for the template we keep it here so the very first
+# agent setup against a fresh Forum project works without touching the Forum
+# repo.)
+#
+# Required role on the operator: `roles/orgpolicy.policyAdmin` on the Forum
+# project. The Forum's admin typically has this. If you don't, ask them to
+# run the equivalent gcloud command once:
+#   gcloud resource-manager org-policies disable-enforce \
+#     iam.disableCrossProjectServiceAccountUsage \
+#     --project=${var.forum_project_id}
+resource "google_project_organization_policy" "allow_cross_project_sa_usage" {
+  project    = var.forum_project_id
+  constraint = "constraints/iam.disableCrossProjectServiceAccountUsage"
+
+  boolean_policy {
+    enforced = false
+  }
+}
+
 # --- Staging bucket for ADK deployments ---
 # `adk deploy agent_engine` uploads the agent code here before deploying
 # to Vertex AI. Lifecycle policy cleans up old uploads after 7 days.
