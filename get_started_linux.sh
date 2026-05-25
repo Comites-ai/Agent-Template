@@ -85,9 +85,9 @@ working agent on Comites.ai's The Forum:
   9.  (Optional) Run terraform apply + populate platform secret values
       silently via gcloud.
   10. (Optional) Wire up a Google Doc for persistent agent memory.
-  11. Rewrite README.md and AGENTS.md to be about your agent.
-  12. Delete template-only files (test.md, MAINTAINER_SETUP.md) and this
-      script itself.
+  11. Rewrite README.md to be about your agent (AGENTS.md is left as-is).
+  12. Delete template-only files (test.md, MAINTAINER_SETUP.md,
+      .readme_template_post_setup.md, tests/) and this script itself.
   13. Print what to do next (platform-side webhook config, then deploy).
 
 ${BOLD}Pre-requisites you must handle yourself:${NC}

@@ -115,8 +115,8 @@ The script should:
 - Run `terraform apply -target=google_secret_manager_secret.telegram_bot_token` (secret container).
 - Populate the Telegram token via `gcloud secrets versions add`.
 - Run the full `terraform apply` (IAM bindings, service account, staging bucket).
-- Rewrite `README.md` and `AGENTS.md` preface.
-- Delete itself, `MAINTAINER_SETUP.md`, `tests/`, and this `test.md`.
+- Rewrite `README.md` (post-setup template). `AGENTS.md` is left as-is.
+- Delete itself, `MAINTAINER_SETUP.md`, `.readme_template_post_setup.md`, `tests/`, and this `test.md`.
 
 **Expected end state**: `README.md` now starts with `# Smoke Test Agent`; `test.md`, `MAINTAINER_SETUP.md`, `tests/`, and `get_started_linux.sh` no longer exist; `terraform/terraform.tfvars` and `.env` are present and populated.
 

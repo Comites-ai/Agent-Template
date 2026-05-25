@@ -25,8 +25,9 @@ from .custom_functions import get_agent_memory, update_agent_memory
 
 # --- (Optional) Scheduler MCP toolset ---
 # Uncomment when you've enabled the scheduler in terraform (Section 6),
-# provisioned the API key (see README.md "Adding the scheduler MCP"), and
-# the secret has been populated. The trailing slash on the URL matters —
+# provisioned the API key (see README.md §"Add MCP toolsets" and The Forum's
+# FOR_AGENT_DEVELOPERS.md §"Scheduler MCP Server"), and the secret has
+# been populated. The trailing slash on the URL matters —
 # FastAPI 307-redirects POST → GET on the bare path and silently breaks
 # the MCP handshake.
 #
