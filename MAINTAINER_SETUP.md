@@ -12,11 +12,7 @@ Follow these steps in order. Each step depends on the previous ones.
 
 ### 1. Create the GitHub repo
 
-Create a new repo under the `Comites-ai` GitHub org. Suggested names (pick one):
-
-- `agent-template` (cleanest)
-- `comites-agent-template` (explicit)
-- `forum-agent-template` (ties to The Forum)
+Create a new repo under the `Comites-ai` GitHub org named `agent-template`. Final URL: https://github.com/Comites-ai/agent-template.
 
 Set the repo's description to something like *"Starter template for building Comites.ai agents on The Forum."* and link to https://github.com/Comites-ai/the-forum.
 
@@ -26,7 +22,7 @@ Set the repo's description to something like *"Starter template for building Com
 
 ```bash
 cd /path/to/this/repo
-git remote add origin git@github.com:Comites-ai/<repo-name>.git
+git remote add origin git@github.com:Comites-ai/agent-template.git
 git push -u origin main
 # (and any feature branches you want to keep)
 ```
@@ -79,7 +75,7 @@ Before going public, confirm the template actually works:
 
 ```bash
 # Clone a fresh copy (don't use your dev copy — you want the published version)
-git clone git@github.com:Comites-ai/<repo-name>.git test_smoke
+git clone git@github.com:Comites-ai/agent-template.git test_smoke
 cd test_smoke
 # Follow test.md
 ```

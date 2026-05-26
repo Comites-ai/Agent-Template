@@ -9,6 +9,18 @@ This README has two audiences:
 - **You want to build a new agent.** → See [Building an agent with this template](#building-an-agent-with-this-template).
 - **You want to change something about the template itself.** → See [Modifying the template](#modifying-the-template).
 
+## About Comites.ai
+
+[Comites.ai](https://comites.ai) is a platform for building specialized AI agents — "a council, not a chatbot." Instead of one general-purpose assistant, you build narrow domain experts (a wine sommelier, a growth coach, a legal advisor, etc.) that users reach through the messaging apps they already live in. The name comes from the Roman *comites* — the trusted companions of an emperor's inner circle.
+
+Three open-source pieces fit together:
+
+- **[The Forum](https://github.com/Comites-ai/the-forum)** (AGPL-3.0) — middleware that bridges Slack, Google Chat, Telegram, and Discord to agents running on Vertex AI. One Forum deployment routes to many agents.
+- **This template** (MIT) — scaffolding for building one of those agents. The output is a Vertex AI Reasoning Engine that registers itself with a Forum and starts receiving traffic on whichever platforms you enable.
+- **The Marketplace** — curated directory where verified agents can be published and adopted into other people's Forums (launching soon).
+
+For a higher-level tour, see [comites.ai/developers](https://comites.ai/developers) and [comites.ai/architecture](https://comites.ai/architecture).
+
 ## Architecture
 
 ```
@@ -105,8 +117,8 @@ After that, the repo is about *your* agent. Edit `agent.py` with your real promp
 6. Creates the GCS bucket for terraform state and wires up the `backend "gcs"` block in `terraform/providers.tf`.
 7. Optionally: runs `terraform apply` (two-phase: secret containers first, then prompts silently for each platform token and `gcloud secrets versions add`, then full apply).
 8. Optionally: wires up a Google Doc for persistent agent memory (prompts for the doc ID, sets `AGENT_MEMORY_DOC_ID` in `.env`, prints the SA email to share the doc with).
-9. Rewrites this README and updates `AGENTS.md`'s preface for your agent.
-10. Deletes the template-only files (`test.md`, `MAINTAINER_SETUP.md`, `tests/`) and itself.
+9. Rewrites this README for your agent. (`AGENTS.md` is left as-is — its hard rules apply to deployed agents unchanged.)
+10. Deletes the template-only files (`test.md`, `MAINTAINER_SETUP.md`, `.readme_template_post_setup.md`, `tests/`) and itself.
 11. Prints what to do next: configure platform webhooks (per-platform instructions for whichever you selected), then `./deploy_and_update.sh`.
 
 ## Repository layout
@@ -193,9 +205,9 @@ CI runs the lint checks automatically on every PR. The unit test and the GCP tes
 
 Most changes touch one or two of these:
 
-- **`get_started_linux.sh`** — the interactive bootstrap. 16 phases, mirroring The Forum's `install.sh` patterns. The trickiest piece is `uncomment_section` (around line 470), which uses a brace-balanced block detector to selectively uncomment platform sections in `terraform/main.tf`. The unit test in `tests/test_uncomment_section.sh` exists specifically because this heuristic is the most likely thing to silently break.
+- **`get_started_linux.sh`** — the interactive bootstrap. 16 phases, mirroring The Forum's `install.sh` patterns. The trickiest piece is the `uncomment_section` function, which uses a brace-balanced block detector to selectively uncomment platform sections in `terraform/main.tf`. The unit test in `tests/test_uncomment_section.sh` exists specifically because this heuristic is the most likely thing to silently break.
 - **`terraform/main.tf`** — all GCP infrastructure for the agent's dedicated project. Section 1 (common) is always active; sections 2-6 (Slack, Google Chat, Telegram, Discord, Scheduler MCP) are commented blocks that `uncomment_section` selectively enables. If you add a new platform or rename resources, update the expected-resource lists in `tests/test_uncomment_section.sh`.
-- **`deploy_and_update.sh`** — blue/green deploy. Generalizes the pattern from `agents/growth_coach`. Reads config from `.env`.
+- **`deploy_and_update.sh`** — blue/green deploy + smoke test + Firestore registration + stale-session cleanup. Reads config from `.env`.
 - **`register_agent.py`** — auto-detects platforms from Secret Manager and writes the agent's Firestore record. Validates each token via the platform's native API before writing.
 - **`agent.py`** — the stub agent that the template ships. Replaces operator-facing logic in `STUB_INSTRUCTION` and `description`. The default persona is Junius Rusticus (Stoic teacher of Marcus Aurelius — namesake inspiration for the project). If you change the stub persona, update the expected keywords in `test.md` step 7.
 - **`AGENTS.md`** — hard rules for AI agents (and humans) working in repos created from the template. Add a new rule when there's a way to break an agent that's not obvious from the code.
@@ -221,13 +233,14 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the CLA process. Briefly:
 3. Open a PR. CLA Assistant will prompt you to sign the CLA on your first PR; do so and email `cla@comites.ai` with the supplemental info described in `CONTRIBUTING.md`.
 4. A maintainer will review. For PRs touching infrastructure files, the maintainer will spot-check the GCP test result you describe in your PR body.
 
-## Maintainer-only docs
+## Internal docs (deleted from end-user repos)
 
-Two files exist for Comites.ai maintainers (not template contributors and not template users):
+Two files exist for template work and don't ship to end users:
 
-- [`MAINTAINER_SETUP.md`](MAINTAINER_SETUP.md) — One-time setup steps for publishing this repo as OSS on GitHub (CLA Assistant, branch protection, etc.) and for updating The Forum repo to point at this template. Read it once when first setting up the repo, then ignore.
+- [`MAINTAINER_SETUP.md`](MAINTAINER_SETUP.md) — One-time setup steps for publishing this repo as OSS on GitHub (CLA Assistant, branch protection, etc.) and for pointing The Forum repo at this template. Read once when first standing up the repo, then ignore.
+- [`test.md`](test.md) — The GCP smoke-test sequence (a required manual gate for PRs that touch infrastructure files). Walks through bootstrap + deploy + end-to-end message flow against a real GCP project.
 
-Both `MAINTAINER_SETUP.md` and `test.md` are deleted by `get_started_linux.sh` so they never appear in an end user's agent repo.
+Both are deleted by `get_started_linux.sh` so they never appear in an end user's agent repo.
 
 ---
 

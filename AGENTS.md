@@ -2,7 +2,7 @@
 
 Hard rules and guidance for AI coding agents (Claude Code, Cursor, Copilot, etc.) working in this repository. This file follows the [agents.md](https://agents.md/) convention.
 
-This agent is built on **[The Forum](https://github.com/Comites-ai/the-forum)** — Comites.ai's open-source platform that bridges messaging platforms (Slack, Google Chat, Telegram, Discord) to AI agents on Vertex AI. Detailed background on how The Forum works lives in The Forum repo at [`docs/FOR_AGENT_DEVELOPERS.md`](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md) — read it before doing anything non-trivial.
+This agent is built on **[The Forum](https://github.com/Comites-ai/the-forum)** — [Comites.ai](https://comites.ai)'s open-source platform that bridges messaging platforms (Slack, Google Chat, Telegram, Discord) to AI agents on Vertex AI. Detailed background on how The Forum works lives in The Forum repo at [`docs/FOR_AGENT_DEVELOPERS.md`](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md) — read it before doing anything non-trivial.
 
 ## Hard rules
 
@@ -148,7 +148,7 @@ Two transports:
 - **stdio** (most public MCP servers): `MCPToolset(connection_params=StdioServerParameters(command="npx", args=["-y", "@org/server"], env={...}))`. Requires `npx`/`uvx` in the Reasoning Engine container.
 - **Streamable HTTP / SSE** (hosted servers, including The Forum's scheduler): `MCPToolset(connection_params=StreamableHTTPConnectionParams(url="...", headers={"X-API-Key": ...}))`.
 
-The scheduler MCP wiring is already stubbed in `agent.py` — uncomment after you've completed the three-step setup (see `terraform/main.tf` Section 6 and `README.md` "Adding the scheduler MCP").
+The scheduler MCP wiring is already stubbed in `agent.py` — uncomment after you've completed the three-step setup: enable Section 6 in `terraform/main.tf`, `terraform apply`, then follow the provisioning instructions in [The Forum's `FOR_AGENT_DEVELOPERS.md` §"Scheduler MCP Server"](https://github.com/Comites-ai/the-forum/blob/main/docs/FOR_AGENT_DEVELOPERS.md#scheduler-mcp-server). The post-setup README's "Add MCP toolsets" section walks through the same flow.
 
 ### Using external APIs that need a key
 
