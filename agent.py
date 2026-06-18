@@ -120,8 +120,14 @@ STUB_INSTRUCTION = (
 )
 
 
+# The default is a Gemini 3 preview model. Gemini 3 returns `thought_signature`
+# tokens on function calls and rejects any follow-up request whose history drops
+# one; the ADK propagates them across parallel/multi tool calls, so this is
+# handled for you. If you swap in another model and start seeing silent empty
+# responses on messages that trigger several tool calls, the model is the first
+# thing to check.
 root_agent = Agent(
-    model=os.environ.get('HIGH_QUALITY_AGENT_MODEL', 'gemini-2.5-flash'),
+    model=os.environ.get('HIGH_QUALITY_AGENT_MODEL', 'gemini-3.1-pro-preview'),
     name='root_agent',
     description=(
         'A new Comites.ai agent built from the agent template. Currently '

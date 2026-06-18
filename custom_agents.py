@@ -13,7 +13,7 @@ Pattern:
     import os
 
     google_search_agent = Agent(
-        model=os.environ.get('QUICK_AGENT_MODEL', 'gemini-2.5-flash'),
+        model=os.environ.get('QUICK_AGENT_MODEL', 'gemini-3-flash-preview'),
         name='google_search_agent',
         description='Performs Google searches and returns relevant results.',
         instruction='Search the web for the user query and return the most relevant results.',

@@ -524,14 +524,15 @@ resource "google_project_iam_member" "engine_runtime_roles" {
 #   depends_on = [google_project_service.secretmanager]
 # }
 #
-# # Grant the AGENT's default compute SA (which Vertex AI Reasoning Engine
-# # runs as by default) read access. If you deploy with --service-account=...
-# # in deploy_and_update.sh, replace the member below with that SA email.
+# # Grant the per-agent SA read access. The Reasoning Engine runs AS this SA
+# # (set via .agent_engine_config.json's service_account field — see AGENTS.md
+# # rule #3), and agent.py reads this key from Secret Manager at startup. This
+# # is the same per-agent SA every other runtime secret binds to.
 # resource "google_secret_manager_secret_iam_member" "scheduler_mcp_key_reasoning_engine" {
 #   project   = var.project_id
 #   secret_id = google_secret_manager_secret.scheduler_mcp_key.secret_id
 #   role      = "roles/secretmanager.secretAccessor"
-#   member    = "serviceAccount:${data.google_project.agent_project.number}-compute@developer.gserviceaccount.com"
+#   member    = "serviceAccount:${google_service_account.agent.email}"
 # }
 
 # ==============================================================================

@@ -87,7 +87,8 @@ working agent on Comites.ai's The Forum:
   10. (Optional) Wire up a Google Doc for persistent agent memory.
   11. Rewrite README.md to be about your agent (AGENTS.md is left as-is).
   12. Delete template-only files (test.md, MAINTAINER_SETUP.md,
-      .readme_template_post_setup.md, tests/) and this script itself.
+      .readme_template_post_setup.md, TRADEMARK.md, THIRD_PARTY_LICENSES,
+      LICENSE.txt, CONTRIBUTING.md, tests/, .github/) and this script itself.
   13. Print what to do next (platform-side webhook config, then deploy).
 
 ${BOLD}Pre-requisites you must handle yourself:${NC}
@@ -201,9 +202,7 @@ phase_3_forum() {
     # Try a few common locations as defaults
     local default=""
     for candidate in \
-        "$REPO_ROOT/../slack-vertex-ai-middleware" \
         "$REPO_ROOT/../the-forum" \
-        "$HOME/projects/slack-vertex-ai-middleware" \
         "$HOME/projects/the-forum"; do
         if [[ -f "$candidate/terraform/terraform.tfvars" ]]; then
             default="$(cd "$candidate" && pwd)"
@@ -423,11 +422,13 @@ phase_6_agent_identity() {
     read -rp "Short description (used for Google Chat & Firestore) [$default_desc]: " AGENT_DESCRIPTION
     AGENT_DESCRIPTION="${AGENT_DESCRIPTION:-$default_desc}"
 
-    read -rp "High-quality model [gemini-2.5-pro]: " HIGH_QUALITY_AGENT_MODEL
-    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-gemini-2.5-pro}"
+    # Defaults are Gemini 3 preview models (see .env.example for the
+    # thought_signature note and the global-endpoint requirement in agent.py).
+    read -rp "High-quality model [gemini-3.1-pro-preview]: " HIGH_QUALITY_AGENT_MODEL
+    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-gemini-3.1-pro-preview}"
 
-    read -rp "Quick/cheap model [gemini-2.5-flash]: " QUICK_AGENT_MODEL
-    QUICK_AGENT_MODEL="${QUICK_AGENT_MODEL:-gemini-2.5-flash}"
+    read -rp "Quick/cheap model [gemini-3-flash-preview]: " QUICK_AGENT_MODEL
+    QUICK_AGENT_MODEL="${QUICK_AGENT_MODEL:-gemini-3-flash-preview}"
 
     ok "Agent identity captured."
     hr
@@ -1062,6 +1063,14 @@ phase_14_cleanup() {
         "$REPO_ROOT/test.md"
         "$REPO_ROOT/MAINTAINER_SETUP.md"
         "$REPO_ROOT/.readme_template_post_setup.md"
+        # Template-only licensing/legal/contributor files — they govern the
+        # template itself, not the agent you're building from it. The
+        # post-setup README's License section is rewritten to drop references
+        # to these.
+        "$REPO_ROOT/TRADEMARK.md"
+        "$REPO_ROOT/THIRD_PARTY_LICENSES"
+        "$REPO_ROOT/LICENSE.txt"
+        "$REPO_ROOT/CONTRIBUTING.md"
     )
     for f in "${to_remove[@]}"; do
         if [[ -e "$f" ]]; then
@@ -1074,6 +1083,13 @@ phase_14_cleanup() {
     if [[ -d "$REPO_ROOT/tests" ]]; then
         rm -rf "$REPO_ROOT/tests"
         ok "Removed tests/"
+    fi
+    # The .github/ dir is template-maintainer machinery: CODEOWNERS, the CLA
+    # PR template, issue templates, and CI that lints the template itself
+    # (and references tests/). None of it applies to a generated agent repo.
+    if [[ -d "$REPO_ROOT/.github" ]]; then
+        rm -rf "$REPO_ROOT/.github"
+        ok "Removed .github/"
     fi
     hr
 }
