@@ -88,7 +88,7 @@ working agent on Comites.ai's The Forum:
   11. Rewrite README.md to be about your agent (AGENTS.md is left as-is).
   12. Delete template-only files (test.md, MAINTAINER_SETUP.md,
       .readme_template_post_setup.md, TRADEMARK.md, THIRD_PARTY_LICENSES,
-      LICENSE.txt, CONTRIBUTING.md, tests/) and this script itself.
+      LICENSE.txt, CONTRIBUTING.md, tests/, .github/) and this script itself.
   13. Print what to do next (platform-side webhook config, then deploy).
 
 ${BOLD}Pre-requisites you must handle yourself:${NC}
@@ -1083,6 +1083,13 @@ phase_14_cleanup() {
     if [[ -d "$REPO_ROOT/tests" ]]; then
         rm -rf "$REPO_ROOT/tests"
         ok "Removed tests/"
+    fi
+    # The .github/ dir is template-maintainer machinery: CODEOWNERS, the CLA
+    # PR template, issue templates, and CI that lints the template itself
+    # (and references tests/). None of it applies to a generated agent repo.
+    if [[ -d "$REPO_ROOT/.github" ]]; then
+        rm -rf "$REPO_ROOT/.github"
+        ok "Removed .github/"
     fi
     hr
 }
