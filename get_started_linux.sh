@@ -423,11 +423,13 @@ phase_6_agent_identity() {
     read -rp "Short description (used for Google Chat & Firestore) [$default_desc]: " AGENT_DESCRIPTION
     AGENT_DESCRIPTION="${AGENT_DESCRIPTION:-$default_desc}"
 
-    read -rp "High-quality model [gemini-2.5-pro]: " HIGH_QUALITY_AGENT_MODEL
-    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-gemini-2.5-pro}"
+    # Defaults are Gemini 3 preview models (see .env.example for the
+    # thought_signature note and the global-endpoint requirement in agent.py).
+    read -rp "High-quality model [gemini-3.1-pro-preview]: " HIGH_QUALITY_AGENT_MODEL
+    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-gemini-3.1-pro-preview}"
 
-    read -rp "Quick/cheap model [gemini-2.5-flash]: " QUICK_AGENT_MODEL
-    QUICK_AGENT_MODEL="${QUICK_AGENT_MODEL:-gemini-2.5-flash}"
+    read -rp "Quick/cheap model [gemini-3-flash-preview]: " QUICK_AGENT_MODEL
+    QUICK_AGENT_MODEL="${QUICK_AGENT_MODEL:-gemini-3-flash-preview}"
 
     ok "Agent identity captured."
     hr

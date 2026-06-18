@@ -111,9 +111,15 @@ This repo and The Forum repo coordinate over Firestore documents and Secret Mana
 
 The Forum's Firestore `sessions` collection holds running conversations. If you change `agent.py`'s prompt in a way that's incompatible with mid-conversation state, sessions from before the change can produce weird responses. `deploy_and_update.sh` step 5 clears stale sessions automatically — let it do its job.
 
+The template relies on managed Agent Engine sessions plus the Forum's Firestore — you don't run your own session store, so nothing here needs tending. If you ever swap in a custom `BaseSessionService` (e.g. your own SQL backend), be aware its persisted session schema is tied to the ADK version that wrote it; don't point a different ADK version at an existing custom session table without confirming the schema still matches.
+
 ### 11. `get_started_linux.sh` is single-use and self-deletes
 
 The bootstrap script runs once at repo setup and deletes itself. Don't try to re-run it to "regenerate" `.env` or `terraform.tfvars` — edit those files directly, or modify them via `terraform.tfvars.example` + a fresh clone.
+
+### 12. Model calls are forced to the `global` endpoint at import time — keep it there
+
+`agent.py` sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. This is deliberate and load-bearing: the Reasoning Engine deploys to a regional location (`us-central1`), but the Gemini preview models the template defaults to are only served on the `global` endpoint. The Google libraries read `GOOGLE_CLOUD_LOCATION` at import, so the override has to come before they're imported. If you move that line below the imports — or drop it — preview models start failing with `404 / NOT_FOUND` while regional models keep working, which makes it look like a model-name typo rather than an endpoint problem.
 
 ## Building your agent
 
@@ -160,6 +166,8 @@ The scheduler MCP wiring is already stubbed in `agent.py` — uncomment after yo
 ### Local development
 
 `adk web` from the repo root spins up a local web UI for the agent (talks to Vertex AI for the model, runs `agent.py` locally). Useful for iterating on prompts and tools without a full Reasoning Engine deploy. The Forum routing/platform stuff is bypassed in this mode — to test platform integration end-to-end, you have to deploy.
+
+Before deploying after a meaningful change, exercise the real agent in-process — `InMemoryRunner` driving `root_agent` with `RunConfig(streaming_mode=SSE)`, a couple of messages that actually trigger your tools. The deployed engine hides model/tool errors behind a generic "failed to start" or an empty reply (e.g. a 400 from a malformed tool-call history shows up only as "0 chunks"); the in-process runner surfaces the real exception. This is the fastest way to catch a bad tool wiring or model issue before it costs you a deploy cycle.
 
 ### Redeploying
 
