@@ -201,9 +201,7 @@ phase_3_forum() {
     # Try a few common locations as defaults
     local default=""
     for candidate in \
-        "$REPO_ROOT/../slack-vertex-ai-middleware" \
         "$REPO_ROOT/../the-forum" \
-        "$HOME/projects/slack-vertex-ai-middleware" \
         "$HOME/projects/the-forum"; do
         if [[ -f "$candidate/terraform/terraform.tfvars" ]]; then
             default="$(cd "$candidate" && pwd)"
