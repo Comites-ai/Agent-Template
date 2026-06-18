@@ -87,7 +87,8 @@ working agent on Comites.ai's The Forum:
   10. (Optional) Wire up a Google Doc for persistent agent memory.
   11. Rewrite README.md to be about your agent (AGENTS.md is left as-is).
   12. Delete template-only files (test.md, MAINTAINER_SETUP.md,
-      .readme_template_post_setup.md, tests/) and this script itself.
+      .readme_template_post_setup.md, TRADEMARK.md, THIRD_PARTY_LICENSES,
+      LICENSE.txt, tests/) and this script itself.
   13. Print what to do next (platform-side webhook config, then deploy).
 
 ${BOLD}Pre-requisites you must handle yourself:${NC}
@@ -1062,6 +1063,12 @@ phase_14_cleanup() {
         "$REPO_ROOT/test.md"
         "$REPO_ROOT/MAINTAINER_SETUP.md"
         "$REPO_ROOT/.readme_template_post_setup.md"
+        # Template-only licensing/legal files — they govern the template
+        # itself, not the agent you're building from it. The post-setup
+        # README's License section is rewritten to drop references to these.
+        "$REPO_ROOT/TRADEMARK.md"
+        "$REPO_ROOT/THIRD_PARTY_LICENSES"
+        "$REPO_ROOT/LICENSE.txt"
     )
     for f in "${to_remove[@]}"; do
         if [[ -e "$f" ]]; then
