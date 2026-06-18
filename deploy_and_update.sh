@@ -132,6 +132,87 @@ fi
 ok "ADK binary: $ADK_BIN"
 
 # ------------------------------------------------------------------
+# Pre-flight: deploy bundle size guard
+# ------------------------------------------------------------------
+# `adk deploy agent_engine` tars AGENT_DIR (minus .ae_ignore matches) and
+# uploads it. Vertex AI rejects payloads over 8 MB with an opaque 400
+# (INVALID_ARGUMENT ... payload size exceeds), and only AFTER a full upload
+# attempt. The usual cause is a virtualenv or data dir that .ae_ignore didn't
+# exclude. Simulate the bundle (same basename-fnmatch rules ADK applies via
+# shutil.ignore_patterns) and fail fast with the offenders BEFORE uploading.
+# Override the cap with MAX_BUNDLE_MB=<n> for a legitimately large bundle.
+log "Pre-flight: checking deploy bundle size against the 8 MB Vertex limit..."
+BUNDLE_REPORT=$("$ADK_PYTHON" - "$AGENT_DIR" <<'PYEOF'
+import os, sys, fnmatch
+
+agent_dir = sys.argv[1]
+limit_mb = float(os.environ.get("MAX_BUNDLE_MB", "8"))
+limit = limit_mb * 1024 * 1024
+
+# .ae_ignore is fed to shutil.ignore_patterns: fnmatch on basenames, not
+# gitignore semantics. Mirror that exactly so the estimate matches the upload.
+patterns = []
+ae = os.path.join(agent_dir, ".ae_ignore")
+if os.path.exists(ae):
+    with open(ae) as fh:
+        for line in fh:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                patterns.append(line)
+
+def ignored(name):
+    return any(fnmatch.fnmatch(name, p) for p in patterns)
+
+def human(n):
+    f = float(n)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if f < 1024 or unit == "TB":
+            return f"{f:.1f} {unit}"
+        f /= 1024
+
+total = 0
+by_top = {}
+for root, dirs, files in os.walk(agent_dir):
+    dirs[:] = [d for d in dirs if not ignored(d)]   # prune ignored dirs at every depth
+    for f in files:
+        if ignored(f):
+            continue
+        fp = os.path.join(root, f)
+        try:
+            sz = os.path.getsize(fp)
+        except OSError:
+            continue
+        total += sz
+        top = os.path.relpath(fp, agent_dir).split(os.sep)[0]
+        by_top[top] = by_top.get(top, 0) + sz
+
+if total > limit:
+    print("TOOBIG")
+    print(f"Bundle is {human(total)} after .ae_ignore (Vertex AI payload limit is {limit_mb:.0f} MB).")
+    print("Biggest entries:")
+    for name, sz in sorted(by_top.items(), key=lambda kv: -kv[1])[:6]:
+        print(f"  {human(sz):>10}  {name}")
+else:
+    print(f"OK {human(total)}")
+PYEOF
+) || {
+    warn "Bundle size pre-check could not run (Python error). Proceeding without it."
+    BUNDLE_REPORT=""
+}
+
+BUNDLE_STATUS=$(echo "$BUNDLE_REPORT" | head -1)
+if [[ "$BUNDLE_STATUS" == "TOOBIG" ]]; then
+    err "Deploy bundle exceeds the Vertex AI payload limit — NOT deploying."
+    echo "$BUNDLE_REPORT" | tail -n +2 | sed 's/^/  /' >&2
+    err "Almost always a venv or data dir that .ae_ignore didn't exclude."
+    err "Fix .ae_ignore (basename fnmatch — e.g. add a bare 'venv' line), or if the"
+    err "bundle is legitimately large: MAX_BUNDLE_MB=<n> ./deploy_and_update.sh"
+    exit 1
+elif [[ "$BUNDLE_STATUS" == OK* ]]; then
+    ok "Deploy bundle size: ${BUNDLE_STATUS#OK }"
+fi
+
+# ------------------------------------------------------------------
 # Step 1: Look for the existing Reasoning Engine (for blue/green)
 # ------------------------------------------------------------------
 log "Step 1: Looking for existing '${AGENT_DISPLAY_NAME}' Reasoning Engine..."
