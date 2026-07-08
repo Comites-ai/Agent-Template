@@ -236,56 +236,89 @@ echo "  Runtime SA:       (from .agent_engine_config.json — should be this age
 AGENT_PARENT_DIR="$(dirname "$AGENT_DIR")"
 AGENT_PACKAGE_NAME="$(basename "$AGENT_DIR")"
 
+DEPLOY_EXIT=0
 DEPLOY_OUTPUT=$(cd "$AGENT_PARENT_DIR" && "$ADK_BIN" deploy agent_engine \
     --project "$FORUM_PROJECT_ID" \
     --region "$REGION" \
     --staging_bucket "gs://${AGENT_PROJECT_ID}-staging" \
     --display_name "$AGENT_DISPLAY_NAME" \
     --agent_engine_config_file "${AGENT_DIR}/.agent_engine_config.json" \
-    "$AGENT_PACKAGE_NAME" 2>&1) || {
-    err "Deployment failed!"
-    echo "$DEPLOY_OUTPUT"
-    exit 1
-}
+    "$AGENT_PACKAGE_NAME" 2>&1) || DEPLOY_EXIT=$?
 echo "$DEPLOY_OUTPUT"
 
-# ADK can exit 0 even when the engine fails to start (e.g. import errors).
-# Detect that explicitly so we don't go on to delete the old working engine.
-if echo "$DEPLOY_OUTPUT" | grep -qE "Deploy failed:|failed to start"; then
-    err "ADK exited 0 but the engine failed to start. NOT touching the old agent."
+# Decide success from adk's exit code AND its output — NEVER from a scraped
+# engine ID. adk can exit 0 while the engine failed to start, and that failure
+# output can still contain a reasoningEngines/<id> path, so a scraped ID is not
+# evidence of a working deploy. Require all three: a clean exit, no failure
+# marker in the output, and a printed Reasoning Engine resource name. Even then
+# we don't cut over — Step 3 verifies against the live API first.
+if [[ "$DEPLOY_EXIT" -ne 0 ]]; then
+    err "Deployment failed (adk exited $DEPLOY_EXIT). Old agent untouched."
     err "Check logs:"
     err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\"' --project=$FORUM_PROJECT_ID --limit=50"
     exit 1
 fi
-
-NEW_AGENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP 'reasoningEngines/\K[0-9]+' | tail -1)
-if [[ -z "$NEW_AGENT_ID" ]]; then
-    warn "Could not auto-extract new agent ID from deploy output."
-    read -rp "  Enter the new Reasoning Engine ID manually: " NEW_AGENT_ID
+if echo "$DEPLOY_OUTPUT" | grep -qiE "Deploy failed:|failed to start|does not exist|Traceback \(most recent call last\)"; then
+    err "adk exited 0 but its output reports a failure. Old agent untouched."
+    err "Check logs:"
+    err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\"' --project=$FORUM_PROJECT_ID --limit=50"
+    exit 1
+fi
+if ! echo "$DEPLOY_OUTPUT" | grep -qE "reasoningEngines/[0-9]+"; then
+    err "Deploy output has no Reasoning Engine resource name — treating as failed."
+    err "Old agent untouched. adk prints the created engine's resource name on a"
+    err "real deploy; its absence means the deploy did not complete. See output above."
+    exit 1
 fi
 
+NEW_AGENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP 'reasoningEngines/\K[0-9]+' | tail -1)
 NEW_RESOURCE_NAME=$(get_agent_resource_name "$NEW_AGENT_ID")
-ok "New Reasoning Engine deployed: $NEW_RESOURCE_NAME"
+ok "adk reported a deploy: $NEW_RESOURCE_NAME (verifying against the live API next)"
 
 # ------------------------------------------------------------------
-# Step 3: Smoke test
+# Step 3: Verify the new engine is actually live (exists + serves)
 # ------------------------------------------------------------------
-log "Step 3: Smoke testing new agent..."
-SMOKE_RESULT=$("$ADK_PYTHON" -c "
+# This is the gate that protects the cutover. Two authoritative checks against
+# the live API, both fatal:
+#   1. Existence — the engine must appear in the Reasoning Engine list. A deploy
+#      whose container failed to start is auto-deleted by adk, so a dead deploy
+#      will NOT be listed (the ID scraped in Step 2 is meaningless on its own).
+#   2. Liveness — it must create a session. A 404 / "does not exist" here means
+#      it cannot serve traffic.
+# Steps 4-6 (repoint Firestore, delete the old agent) run ONLY if this passes,
+# so a failed deploy can never repoint to a dead engine or delete the fallback.
+log "Step 3: Verifying new engine exists and serves traffic..."
+VERIFY_RESULT=$("$ADK_PYTHON" -c "
+import sys
 import vertexai
 from vertexai.preview import reasoning_engines
 vertexai.init(project='${FORUM_PROJECT_ID}', location='${REGION}')
-agent = reasoning_engines.ReasoningEngine('${NEW_RESOURCE_NAME}')
+
+target_id = '${NEW_AGENT_ID}'
+resource_name = '${NEW_RESOURCE_NAME}'
+
+# 1) Existence: the engine must be in the live list. A failed-to-start deploy
+#    is auto-deleted by adk, so it won't appear here even though Step 2 scraped
+#    its (now-dead) ID from the deploy output.
+live_ids = [e.resource_name.split('/')[-1] for e in reasoning_engines.ReasoningEngine.list()]
+if target_id not in live_ids:
+    print(f'NOT_FOUND: engine {target_id} is not in the live engine list (deploy likely failed and was auto-deleted)')
+    sys.exit(1)
+
+# 2) Liveness: it must actually create a session.
+agent = reasoning_engines.ReasoningEngine(resource_name)
 session = agent.create_session(user_id='smoke-test')
 print(f'Session created: {session[\"id\"]}')
-print('OK')
+print('VERIFIED_OK')
 " 2>&1) || true
 
-if echo "$SMOKE_RESULT" | grep -q "OK"; then
-    ok "Smoke test passed."
+if echo "$VERIFY_RESULT" | grep -q "VERIFIED_OK"; then
+    ok "New engine verified live (exists + creates sessions)."
 else
-    err "Smoke test failed. NOT touching the old agent."
-    echo "$SMOKE_RESULT" | tail -10
+    err "New engine verification FAILED — it does not exist or cannot serve traffic."
+    err "NOT repointing Firestore and NOT deleting the old agent; the previous"
+    err "engine (if any) is untouched and still serving."
+    echo "$VERIFY_RESULT" | tail -15
     err "Check logs:"
     err "  gcloud logging read 'resource.type=\"aiplatform.googleapis.com/ReasoningEngine\" AND resource.labels.reasoning_engine_id=\"$NEW_AGENT_ID\"' --project=$FORUM_PROJECT_ID --limit=50"
     exit 1
