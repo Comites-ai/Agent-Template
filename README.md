@@ -53,7 +53,8 @@ The template gives you:
 - An ADK agent stub (`agent.py`) that replies with a recognizable greeting until you replace its instruction with real logic — so the first deploy proves the full pipeline works before you write any agent code.
 - `terraform/` for the agent's dedicated GCP project (service account, secrets per platform, IAM bindings to The Forum, ADK staging bucket, Workspace API enablements). Platform sections commented out until you select them.
 - `deploy_and_update.sh` — blue/green deploy + smoke test + Firestore registration + stale-session cleanup.
-- `register_agent.py` — auto-detects enabled platforms by probing Secret Manager and writes the agent record to The Forum's Firestore.
+- `register_agent.py` — auto-detects enabled platforms by probing Secret Manager and writes the agent record to The Forum's Firestore, including the agent's published **inquiries** (see below).
+- `inquiries.json` — declares the "inquiries" your agent can field from OTHER agents via The Forum's agents (A2A) MCP server: each with a request/response format peer agents can rely on. Registered to Firestore on every deploy and shown in The Forum's admin UI. The matching consumer side (querying other agents) is a commented `agents_toolset` block in `agent.py`, using the same API key as the scheduler MCP. See The Forum's `FOR_AGENT_DEVELOPERS.md` §"Agents MCP Server".
 - `get_started_linux.sh` — interactive bootstrap that asks you a handful of questions, generates `.env` + `terraform.tfvars`, uncomments the right terraform sections, provisions the state bucket, optionally runs `terraform apply` + populates secrets, optionally wires up a Google Doc for persistent memory, rewrites this README to be about your agent, and self-deletes.
 - `AGENTS.md` — hard rules for AI coding agents working in the repo (and equally useful for humans).
 

@@ -1,0 +1,11 @@
+{
+  "description": "REPLACE ME: one line describing what this agent does — shown to other agents via the Forum's A2A MCP list_agents tool.",
+  "inquiries": [
+    {
+      "name": "example_inquiry",
+      "description": "REPLACE ME: what this inquiry answers. Delete this example (or the whole file, if your agent fields no inquiries) before deploying. Each inquiry you publish here must have a matching protocol section in agent.py's prompt that answers it in EXACTLY the response_format below — the registry is a promise to other agents.",
+      "request_format": "AGENT_QUERY: example_inquiry",
+      "response_format": "EXAMPLE <YYYY-MM-DD>: field_one=<value> field_two=<value>"
+    }
+  ]
+}

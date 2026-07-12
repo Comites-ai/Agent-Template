@@ -121,6 +121,35 @@ The bootstrap script runs once at repo setup and deletes itself. Don't try to re
 
 `agent.py` sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. This is deliberate and load-bearing: the Reasoning Engine deploys to a regional location (`us-central1`), but the Gemini preview models the template defaults to are only served on the `global` endpoint. The Google libraries read `GOOGLE_CLOUD_LOCATION` at import, so the override has to come before they're imported. If you move that line below the imports — or drop it — preview models start failing with `404 / NOT_FOUND` while regional models keep working, which makes it look like a model-name typo rather than an endpoint problem.
 
+### 13. Inquiry formats are a published contract — change them atomically
+
+If your agent publishes "inquiries" (things other agents can ping it about,
+via `inquiries.json` + `register_agent.py`), peer agents parse the response
+formats verbatim. Any change must touch all the places that state the
+format in ONE commit: `inquiries.json`, the prompt section in `agent.py`
+that answers the inquiry, and your README's interface table — then
+redeploy (registration happens automatically on deploy).
+
+### 14. A2A messages carry an On-Behalf-Of user — scope answers to it
+
+Messages prefixed `[From Agent: <Agent> | On Behalf Of: <User>]` come from
+other agents via The Forum's agents MCP server. Agents are multi-user:
+scope every answer strictly to that user, and reply `NO_DATA: <reason>`
+for users your agent has no data on. Never let one user's data answer a
+question about another user. Symmetrically, when YOUR agent calls
+`query_agent`, always pass `on_behalf_of` copied verbatim from the
+`[From: <name>]` prefix you are working under.
+
+### 15. Scheduled condition-check jobs reply [SILENT], never empty
+
+The Forum treats an empty reply to a fired scheduled job as a failure; a
+reply starting with `[SILENT]` is recorded as a successful run with
+nothing delivered to the user. Any job that only sometimes has news
+("check hourly, tell me if something happened") must be prompted to reply
+`[SILENT]` on the quiet path — otherwise it either spams the user every
+tick or racks up failure counts until The Forum warns the user the job is
+broken.
+
 ## Building your agent
 
 When you're filling in actual agent behavior:

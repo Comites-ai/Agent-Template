@@ -47,6 +47,30 @@ from .custom_functions import get_agent_memory, update_agent_memory
 #     ),
 # )
 
+# --- (Optional) Agents (A2A) MCP toolset ---
+# The Forum's second MCP server lets this agent talk to other agents
+# attached to the same Forum: list_agents (who's there and what they
+# field), get_agent_inquiries (their request/response formats), and
+# query_agent (send a message). The SAME API key authenticates both MCP
+# servers, so if you've provisioned the scheduler key you can enable this
+# by just uncommenting (same trailing-slash rule).
+#
+# Two prompt contracts to honor if you enable this (see AGENTS.md and
+# The Forum's FOR_AGENT_DEVELOPERS.md §"Agents MCP Server"):
+#   1. query_agent REQUIRES on_behalf_of — the human user the query
+#      concerns, copied verbatim from your '[From: <name>]' prefix.
+#   2. Inbound messages prefixed '[From Agent: <Agent> | On Behalf Of:
+#      <User>]' are other agents querying YOU. Answer in the exact
+#      response_format you publish in inquiries.json, scoped strictly to
+#      that user, or reply "NO_DATA: <reason>" if you don't serve them.
+#
+# agents_toolset = MCPToolset(
+#     connection_params=StreamableHTTPConnectionParams(
+#         url=f"{os.environ['FORUM_URL']}/api/v1/mcp/agents/",
+#         headers={"X-API-Key": _load_scheduler_mcp_key()},
+#     ),
+# )
+
 # --- Stub instruction (Junius Rusticus persona) ---
 # The default persona is the historical Stoic philosopher and consul who
 # taught Marcus Aurelius — and who lends his title (comes / comites) to
