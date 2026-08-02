@@ -84,7 +84,8 @@ def get_secret_from_secret_manager(
     Args:
         project_id: The GCP project hosting the secret. For per-agent secrets
             (Slack tokens, MCP keys, etc.) this is the agent's own project
-            (BOT_ACCOUNT_ID and AGENT_SECRET_PROJECT in .env).
+            (AGENT_PROJECT_ID in .env; AGENT_SECRET_PROJECT optionally
+            overrides it for setups that keep secrets elsewhere).
         secret_id: The Secret Manager secret ID (not the resource name).
         version_id: Secret version. Defaults to "latest".
 
