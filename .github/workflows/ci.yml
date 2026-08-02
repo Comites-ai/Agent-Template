@@ -55,4 +55,6 @@ jobs:
             custom_functions.py \
             custom_agents.py \
             secret_utilities.py \
+            storage_utilities.py \
+            docs_utilities.py \
             register_agent.py
