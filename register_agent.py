@@ -42,6 +42,25 @@ from pathlib import Path
 from google.api_core import exceptions as google_exc
 from google.cloud import firestore, secretmanager
 
+# ---- Inbound file types ----
+# The Forum gates inbound attachments on the per-agent `accepted_file_types`
+# field this script writes to Firestore. Files whose MIME type isn't listed
+# are dropped BEFORE the agent is invoked — the agent only sees a
+# "dropped files" note, and nothing in the agent's own logs explains why.
+#
+# SHARP EDGE: a non-empty declaration REPLACES The Forum's default image
+# allowlist rather than extending it. Declaring ["application/pdf"] alone
+# would silently stop this agent receiving photographs. Always extend
+# IMAGE_TYPES rather than hand-writing the list from scratch.
+IMAGE_TYPES = [
+    "image/png", "image/jpeg", "image/gif",
+    "image/webp", "image/heic", "image/heif",
+]
+PDF_TYPES = ["application/pdf"]
+
+# get_started_linux.sh rewrites this line if you opt into PDFs at bootstrap.
+ACCEPTED_FILE_TYPES = IMAGE_TYPES  # + PDF_TYPES to also accept PDFs
+
 
 def parse_tfvars(path: Path) -> dict:
     """Parse simple `key = "value"` lines from a terraform.tfvars file."""
@@ -238,6 +257,7 @@ def main():
     print(f"  Vertex AI:     {args.vertex_ai_agent_id}")
     print(f"  Agent project: {tfvars['project_id']}")
     print(f"  Firestore in:  {args.firestore_project}")
+    print(f"  File types:    {', '.join(ACCEPTED_FILE_TYPES)}")
     print()
     print("Detecting platforms from Secret Manager...")
 
@@ -257,6 +277,7 @@ def main():
         "display_name": args.agent_name,
         "vertex_ai_agent_id": args.vertex_ai_agent_id,
         "platforms": platforms,
+        "accepted_file_types": ACCEPTED_FILE_TYPES,
         "updated_at": datetime.now(timezone.utc),
         **legacy,
     }

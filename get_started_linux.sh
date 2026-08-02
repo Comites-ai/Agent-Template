@@ -482,12 +482,27 @@ phase_7_platforms() {
         read -rp "Discord Application ID: " DISCORD_APPLICATION_ID
     fi
 
+    # Inbound file types. The Forum only forwards attachments whose MIME
+    # type the agent declares in Firestore (register_agent.py writes the
+    # list). Images are always included; PDFs are opt-in — and this is the
+    # cheapest moment to get that right, because a dropped file type is
+    # invisible later: the agent is invoked normally with a "dropped files"
+    # note and truthfully reports it can't read the file, with nothing in
+    # its logs pointing at the capability field.
+    echo
+    echo "Agents always receive image uploads. Should this agent ALSO accept"
+    echo "PDF uploads (e.g. to read receipts, invoices, or reports)?"
+    ACCEPT_PDFS=false
+    read -rp "Accept PDFs? [y/N]: " pdf_answer
+    [[ "$pdf_answer" =~ ^[Yy] ]] && ACCEPT_PDFS=true
+
     local selected=""
     $USE_SLACK     && selected="$selected slack"
     $USE_GCHAT     && selected="$selected gchat"
     $USE_TELEGRAM  && selected="$selected telegram"
     $USE_DISCORD   && selected="$selected discord"
     $USE_SCHEDULER && selected="$selected scheduler"
+    $ACCEPT_PDFS   && selected="$selected (+pdf uploads)"
     ok "Selected:${selected}"
     hr
 }
@@ -555,6 +570,24 @@ GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=TRUE
 OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=TRUE
 EOF
     ok "Wrote .env"
+
+    # --- Apply the PDF choice from Phase 7 to register_agent.py ---
+    # register_agent.py ships with images-only (The Forum's default) and a
+    # marker comment on the ACCEPTED_FILE_TYPES line; opting in swaps the
+    # line to extend the image list. Extending (rather than replacing) the
+    # list matters: a non-empty declaration REPLACES The Forum's default
+    # image allowlist, so a bare PDF-only list would silently stop the
+    # agent receiving photographs.
+    if [[ "$ACCEPT_PDFS" == "true" ]]; then
+        sed -i 's/^ACCEPTED_FILE_TYPES = IMAGE_TYPES  # + PDF_TYPES to also accept PDFs$/ACCEPTED_FILE_TYPES = IMAGE_TYPES + PDF_TYPES/' \
+            "$REPO_ROOT/register_agent.py"
+        if grep -q '^ACCEPTED_FILE_TYPES = IMAGE_TYPES + PDF_TYPES$' "$REPO_ROOT/register_agent.py"; then
+            ok "register_agent.py: agent will accept PDFs in addition to images."
+        else
+            warn "Could not update ACCEPTED_FILE_TYPES in register_agent.py —"
+            warn "  edit it manually to: ACCEPTED_FILE_TYPES = IMAGE_TYPES + PDF_TYPES"
+        fi
+    fi
 
     # --- Render .agent_engine_config.json with the real SA email ---
     # ADK reads this file at deploy time and uses `service_account` to tell
