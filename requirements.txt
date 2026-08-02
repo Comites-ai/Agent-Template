@@ -5,6 +5,8 @@ google-auth-httplib2
 google-api-python-client
 google-cloud-secret-manager
 google-cloud-firestore
+# For storage_utilities.py (reading files users send the agent).
+google-cloud-storage
 google-cloud-aiplatform
 google-genai
 # [a2a] pulls the a2a package the ADK API server needs for its task store. The

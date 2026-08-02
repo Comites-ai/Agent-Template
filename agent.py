@@ -37,7 +37,16 @@ from .custom_functions import get_agent_memory, update_agent_memory
 # SCHEDULER_MCP_KEY_SECRET_ID = f"{os.environ['BOT_ACCOUNT_ID']}-scheduler-mcp-key"
 #
 # def _load_scheduler_mcp_key() -> str:
-#     project_id = os.environ.get('AGENT_SECRET_PROJECT') or os.environ['GOOGLE_CLOUD_PROJECT']
+#     # The key secret lives in the AGENT's project (terraform Section 6
+#     # creates it there), NOT the Forum's — and GOOGLE_CLOUD_PROJECT points
+#     # at the Forum's project, so it's only a last-resort fallback here.
+#     # AGENT_SECRET_PROJECT is an optional override for the rare setup that
+#     # keeps secrets in a third project; .env doesn't normally define it.
+#     project_id = (
+#         os.environ.get('AGENT_SECRET_PROJECT')
+#         or os.environ.get('AGENT_PROJECT_ID')
+#         or os.environ['GOOGLE_CLOUD_PROJECT']
+#     )
 #     return get_secret_from_secret_manager(project_id, SCHEDULER_MCP_KEY_SECRET_ID)
 #
 # scheduler_toolset = MCPToolset(
