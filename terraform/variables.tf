@@ -42,6 +42,12 @@ variable "forum_project_id" {
   type        = string
 }
 
+variable "forum_files_bucket" {
+  description = "Name of The Forum's inbound-files bucket (where user-uploaded attachments land). Leave empty to use the Forum's naming convention, <forum_project_id>-slack-files. Set this only if the Forum operator pointed GCS_BUCKET_NAME at a differently-named bucket — the bucket lives in the Forum's own terraform state, so this is a name-based reference with no dependency check: a wrong name here means the grant binds against nothing and every file read 403s with no other signal."
+  type        = string
+  default     = ""
+}
+
 variable "discord_application_id" {
   description = "Discord application ID from the Developer Portal (General Information → Application ID). Required only if Section 5 (Discord) is uncommented and the Discord secret is populated; register_agent.py writes it onto the Firestore platform block for traceability. Leave empty if not using Discord."
   type        = string

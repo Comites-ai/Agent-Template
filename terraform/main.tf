@@ -42,6 +42,10 @@ locals {
   # The Forum's Cloud Run runs as the project's default compute SA.
   forum_runtime_sa = "${data.google_project.forum.number}-compute@developer.gserviceaccount.com"
 
+  # The Forum's inbound-files bucket. Defaults to the Forum's naming
+  # convention; see the forum_files_bucket variable for when to override.
+  forum_files_bucket = var.forum_files_bucket != "" ? var.forum_files_bucket : "${var.forum_project_id}-slack-files"
+
   # Three Vertex AI service agents in the Forum project participate in
   # the agent engine lifecycle at different phases. All three need
   # iam.serviceAccountTokenCreator on the per-agent SA — missing any one
@@ -313,6 +317,33 @@ resource "google_storage_bucket_iam_member" "engine_staging_reader" {
   bucket = google_storage_bucket.staging.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:service-${data.google_project.forum.number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+}
+
+# --- Read access to The Forum's inbound-files bucket ---
+# The Forum uploads attachments users send the agent to its own bucket
+# and passes the agent a gs:// reference in the message text. Without
+# this grant the engine 403s on every fetch, which surfaces to the end
+# user as the agent claiming it can't read the file.
+#
+# Two constraints here are load-bearing — do not "simplify" either:
+#
+#   1. `_iam_member`, never `_iam_binding`. The bucket is shared by every
+#      agent registered with this Forum. The `_binding` variant is
+#      authoritative for the role and would revoke every OTHER agent's
+#      read access on the next apply.
+#
+#   2. Bucket-scoped, not project-scoped. Adding storage.objectViewer to
+#      `forum_runtime_roles_for_agent_sa` below is a one-line diff, but
+#      it grants read on EVERY bucket in the Forum project — including
+#      the Forum's terraform state bucket — to every agent SA.
+#
+# Reading the object also requires the quota-project pinning in
+# storage_utilities.py — this grant alone is not sufficient from the
+# deployed engine. See that module's docstring.
+resource "google_storage_bucket_iam_member" "engine_inbound_files_reader" {
+  bucket = local.forum_files_bucket
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.agent.email}"
 }
 
 # --- Per-agent SA roles on the Forum project ---

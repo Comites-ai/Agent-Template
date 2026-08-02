@@ -37,6 +37,12 @@ chat_credentials_secret_name = "my-agent-chat-credentials"
 # this agent's platform secrets.
 forum_project_id = "your-forum-project-id"
 
+# The Forum's inbound-files bucket (where attachments users send the agent
+# land). Omit to use the default naming convention,
+# "<forum_project_id>-slack-files". Only set this if the Forum operator
+# pointed GCS_BUCKET_NAME at a differently-named bucket.
+# forum_files_bucket = "your-forum-project-id-slack-files"
+
 # ==============================================================================
 # Discord (only if Section 5 is uncommented and you're using Discord)
 # ==============================================================================
