@@ -1,0 +1,49 @@
+{
+  "_readme": [
+    "Inquiries this agent publishes to The Forum's A2A register (read by other agents via get_agent_inquiries).",
+    "register_agent.py publishes this file's 'description' and 'inquiries' at deploy time; this _readme key is ignored.",
+    "Entries marked \"standard\": true are the Magister capability suite (see comites_standard.py). They are published",
+    "ONLY when MAGISTER_DISPLAY_NAME is set in .env — a deployment without a Magister publishes none of them.",
+    "PRUNE the standard entries to the ones that genuinely fit this agent's domain (an honest register beats a full",
+    "one — agents are encouraged to abstain, and an inquiry you can't answer well is noise). Pruning here prunes the",
+    "prompt too: comites_standard.py reads this file at runtime (it ships in the deploy bundle) and only teaches the",
+    "standard inquiries still present. Add agent-specific inquiries as plain entries without the 'standard' flag;",
+    "those publish regardless of the Magister gate.",
+    "Contract atomicity: standard request/response formats must match comites_standard.STANDARD_CONTRACTS verbatim —",
+    "register_agent.py fails the deploy on drift. For agent-specific inquiries, update instruction and README in the",
+    "SAME commit as any format change.",
+    "Set 'description' to a short third-person summary of what this agent does; leave it empty to keep the",
+    "register entry description-less."
+  ],
+  "description": "",
+  "inquiries": [
+    {
+      "standard": true,
+      "name": "review_idea",
+      "description": "Vote for/against an idea within this agent's domain, with 1-10 conviction (strength of opinion, independent of direction). Abstains outside its domain.",
+      "request_format": "AGENT_QUERY: review_idea | idea=<free text> | context=<optional>",
+      "response_format": "IDEA_REVIEW: verdict=<for|against|abstain> conviction=<1-10> | reason=<one sentence>"
+    },
+    {
+      "standard": true,
+      "name": "goal_progress",
+      "description": "Score the user's recent progress on a named goal or mantra from this agent's own records (1-10). Answers NO_DATA for items it cannot observe.",
+      "request_format": "AGENT_QUERY: goal_progress | item=<exact goal or mantra string> | window_days=<n>",
+      "response_format": "GOAL_PROGRESS: item=<string> score=<1-10> | evidence=<one sentence>"
+    },
+    {
+      "standard": true,
+      "name": "focus_items",
+      "description": "What the user should focus on today or this week from this agent's domain, with conviction driven by deadline proximity and goal importance.",
+      "request_format": "AGENT_QUERY: focus_items | horizon=<today|week> | today=<YYYY-MM-DD> | context=<optional trip/calendar hints>",
+      "response_format": "FOCUS: none — or 1-3 lines of: FOCUS: item=<action> conviction=<1-10> | why=<deadline or goal linkage>"
+    },
+    {
+      "standard": true,
+      "name": "daily_metric",
+      "description": "Report a tracked metric's value for ANY date this agent has data for (not just today) — used to fill the user's daily tracking sheet, including backfill.",
+      "request_format": "AGENT_QUERY: daily_metric | metric=<column key> | date=<YYYY-MM-DD>",
+      "response_format": "METRIC: metric=<key> date=<YYYY-MM-DD> value=<number|text> — or NO_DATA: <reason>"
+    }
+  ]
+}

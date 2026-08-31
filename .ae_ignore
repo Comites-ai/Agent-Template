@@ -71,6 +71,9 @@ MAINTAINER_SETUP.md
 get_started_linux.sh
 deploy_and_update.sh
 register_agent.py
+# NOTE: inquiries.json is deliberately NOT ignored — comites_standard.py
+# reads it at runtime to build the Magister instruction fragment from the
+# pruned entry list, so it must ship in the deploy bundle (~3 KB).
 
 # Docs (don't bloat the container)
 README.md
