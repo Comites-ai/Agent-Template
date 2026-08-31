@@ -22,6 +22,7 @@ from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool  # noqa: F401
 
 from .custom_functions import get_agent_memory, update_agent_memory
+from .comites_standard import magister_instruction
 
 # --- (Optional) Scheduler MCP toolset ---
 # Uncomment when you've enabled the scheduler in terraform (Section 6),
@@ -52,6 +53,30 @@ from .custom_functions import get_agent_memory, update_agent_memory
 # scheduler_toolset = MCPToolset(
 #     connection_params=StreamableHTTPConnectionParams(
 #         url=f"{os.environ['FORUM_URL']}/api/v1/mcp/scheduler/",
+#         headers={"X-API-Key": _load_scheduler_mcp_key()},
+#     ),
+# )
+
+# --- (Optional) Agents MCP toolset — agent-to-agent communication ---
+# The Forum's A2A server: list_agents / get_agent_inquiries / query_agent.
+# Same X-API-Key as the scheduler MCP (one key authenticates both servers),
+# same trailing-slash rule. Enable this whenever your agent talks to other
+# agents — REQUIRED if this deployment has a Magister (MAGISTER_DISPLAY_NAME
+# set in .env): the standard capability suite routes shared-asset writes
+# through the Magister via query_agent. See comites_standard.py.
+#
+# Uncommenting this block alone is NOT enough:
+#   1. Also uncomment the MCPToolset/StreamableHTTPConnectionParams imports
+#      and _load_scheduler_mcp_key() from the scheduler section above
+#      (scheduler_toolset itself can stay commented) — this block reuses them.
+#   2. The shared key secret must exist and be populated (terraform
+#      Section 6 + the Forum repo's provision_scheduler_api_key.py) even if
+#      you never use the scheduler.
+#   3. Add agents_toolset to root_agent.tools below.
+#
+# agents_toolset = MCPToolset(
+#     connection_params=StreamableHTTPConnectionParams(
+#         url=f"{os.environ['FORUM_URL']}/api/v1/mcp/agents/",
 #         headers={"X-API-Key": _load_scheduler_mcp_key()},
 #     ),
 # )
@@ -144,7 +169,12 @@ root_agent = Agent(
         'replace this description and STUB_INSTRUCTION in agent.py with '
         'your real agent prompt.'
     ),
-    instruction=STUB_INSTRUCTION,
+    # magister_instruction() appends the standard capability suite (votes,
+    # progress scores, focus items, daily metrics + write-via-Magister rule)
+    # ONLY when MAGISTER_DISPLAY_NAME is set in .env. Unset, it returns ""
+    # and this agent behaves exactly like a standalone agent. Keep the
+    # concatenation when you replace STUB_INSTRUCTION with your own prompt.
+    instruction=STUB_INSTRUCTION + magister_instruction(),
     tools=[
         # Persistent memory via Google Docs — wired up AND exercised by
         # the stub above. After the first message, the configured memory

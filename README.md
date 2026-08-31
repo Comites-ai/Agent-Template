@@ -129,6 +129,8 @@ After that, the repo is about *your* agent. Edit `agent.py` with your real promp
 ├── __init__.py
 ├── custom_functions.py       # Your FunctionTool implementations
 ├── custom_agents.py          # Your sub-agents (used via AgentTool)
+├── comites_standard.py       # Standard Magister capability suite (dormant unless MAGISTER_DISPLAY_NAME set)
+├── inquiries.json            # A2A register entries published at deploy (standard entries gated)
 ├── secret_utilities.py       # Secret Manager + retry helpers
 ├── requirements.txt
 ├── .env / .env.example       # Runtime config (.env is gitignored)
@@ -152,6 +154,32 @@ After that, the repo is about *your* agent. Edit `agent.py` with your real promp
 # Template-only files (deleted by get_started_linux.sh on first run):
 # test.md, MAINTAINER_SETUP.md, tests/, .readme_template_post_setup.md
 ```
+
+## Optional: deployments with a Magister (chief of staff)
+
+An estate of Comites agents can optionally add a **Magister** — a coordinating
+agent that owns the user's shared assets (todo list, calendar, email,
+tracking documents) as their *sole writer*, runs the daily planning
+conversations, and polls the other agents for opinions and status. Comites
+and The Forum work **with or without** one; nothing in this template requires
+it.
+
+The whole arrangement keys off one `.env` switch: `MAGISTER_DISPLAY_NAME`.
+
+- **Unset (default):** this agent is standalone. `comites_standard.py`
+  contributes nothing to the prompt, the `"standard": true` entries in
+  `inquiries.json` are not published, and the agent manages its own
+  integrations directly.
+- **Set to the Magister's display name:** the standard capability suite
+  activates — the agent answers four standard inquiries (`review_idea`,
+  `goal_progress`, `focus_items`, `daily_metric`) on a shared 1-10
+  conviction scale with an explicit abstention convention (`NO_DATA:`), and
+  routes shared-asset writes through the Magister via the Forum's
+  `query_agent` tool (enable the agents MCP toolset in `agent.py`).
+
+Prune the standard entries in `inquiries.json` to the ones that genuinely
+fit your agent's domain — an honest register beats a full one. See
+`comites_standard.py` and AGENTS.md rule 13 for the contract details.
 
 ---
 

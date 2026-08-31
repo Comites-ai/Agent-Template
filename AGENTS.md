@@ -121,6 +121,16 @@ The bootstrap script runs once at repo setup and deletes itself. Don't try to re
 
 `agent.py` sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. This is deliberate and load-bearing: the Reasoning Engine deploys to a regional location (`us-central1`), but the Gemini preview models the template defaults to are only served on the `global` endpoint. The Google libraries read `GOOGLE_CLOUD_LOCATION` at import, so the override has to come before they're imported. If you move that line below the imports — or drop it — preview models start failing with `404 / NOT_FOUND` while regional models keep working, which makes it look like a model-name typo rather than an endpoint problem.
 
+### 13. The Magister capability suite is conditional — and must stay that way
+
+Comites and The Forum work **with or without** a Magister (an optional chief-of-staff agent that coordinates the others and is the sole writer to shared assets). Everything Magister-related keys off ONE switch: `MAGISTER_DISPLAY_NAME` in `.env`.
+
+- **Unset (default):** `comites_standard.magister_instruction()` returns `""`, `register_agent.py` skips every `"standard": true` entry in `inquiries.json`, and the agent behaves exactly like an agent built before the suite existed — direct integrations and all. Never make agent behavior depend on a Magister existing unless it's behind this gate.
+- **Set:** the instruction fragment activates (write-via-Magister rule, the four standard inquiries, the shared conviction scale, the `NO_DATA:` abstention convention) and the standard register entries publish. The agents MCP toolset must be enabled in `agent.py` in this mode — `query_agent` is the transport.
+- **Prune honestly:** delete the standard entries from `inquiries.json` that don't genuinely fit your agent's domain. Abstention is encouraged; an inquiry you can't answer well is register noise. Pruning the file prunes the prompt in the same commit — `comites_standard.py` reads `inquiries.json` at runtime, which is why that file ships in the deploy bundle (it is deliberately absent from `.ae_ignore`).
+- **Contract atomicity is enforced:** standard entries' request/response formats must match `comites_standard.STANDARD_CONTRACTS` verbatim — `register_agent.py` fails the deploy on drift, and `tests/test_comites_standard.py` checks the shipped stub. Change formats in both files (plus your README) in ONE commit.
+- **Turning the gate off retracts on the next deploy:** when a redeploy publishes no inquiries (gate off, or everything pruned), `register_agent.py` deletes the previously published `inquiries` field from the Firestore doc so other agents stop discovering contracts you no longer implement. The `description` field is deliberately left in place (it may be maintained by hand in Firestore).
+
 ## Building your agent
 
 When you're filling in actual agent behavior:
