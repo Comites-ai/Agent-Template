@@ -29,9 +29,16 @@ a message in these formats. This module only provides the format strings and
 lightweight parsers (used mainly by Magister-side code and tests).
 """
 import json
+import logging
 import os
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Resolved at import so a relative __file__ or a later os.chdir can never
+# break the inquiries.json lookup (observed risk in deployed engines).
+_MODULE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
 # Conviction scale — quoted verbatim in every agent's instruction so a "7"
@@ -140,10 +147,18 @@ def published_standard_inquiries() -> list:
     unreadable — the fragment then teaches no standard inquiries but keeps
     the write-via-Magister rule.
     """
+    path = _MODULE_DIR / "inquiries.json"
     try:
-        with open(Path(__file__).parent / "inquiries.json", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        # An unreadable register file silently disables the standard-inquiry
+        # section of the instruction — make that state LOUD in the logs.
+        logger.warning(
+            "comites_standard: could not read %s (%r) — the Magister "
+            "instruction fragment will teach NO standard inquiries this "
+            "process", path, e,
+        )
         return []
     return [
         inq.get("name") for inq in data.get("inquiries", [])
