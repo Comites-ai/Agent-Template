@@ -12,7 +12,7 @@ See `README.md` ("Next steps") and `AGENTS.md` for guidance.
 import os
 
 # Force model API calls to the `global` endpoint so preview models (e.g.
-# `gemini-3.1-pro-preview`) are accessible even when the Agent Engine itself
+# the Gemini search and vision calls) are accessible even when the Agent Engine itself
 # is deployed in a regional location like us-central1. Safe to leave on for
 # non-preview models too.
 os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'
