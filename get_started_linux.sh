@@ -422,13 +422,20 @@ phase_6_agent_identity() {
     read -rp "Short description (used for Google Chat & Firestore) [$default_desc]: " AGENT_DESCRIPTION
     AGENT_DESCRIPTION="${AGENT_DESCRIPTION:-$default_desc}"
 
-    # Defaults are Gemini 3 preview models (see .env.example for the
-    # thought_signature note and the global-endpoint requirement in agent.py).
-    read -rp "High-quality model [gemini-3.1-pro-preview]: " HIGH_QUALITY_AGENT_MODEL
-    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-gemini-3.1-pro-preview}"
+    # Fleet standard (2026-09-06): Claude on the first-party Anthropic API for
+    # the agents, Gemini only for google_search sub-agents and direct vision
+    # calls (see .env.example and model_utils.py).
+    read -rp "Root agent model [claude-opus-5]: " HIGH_QUALITY_AGENT_MODEL
+    HIGH_QUALITY_AGENT_MODEL="${HIGH_QUALITY_AGENT_MODEL:-claude-opus-5}"
 
-    read -rp "Quick/cheap model [gemini-3-flash-preview]: " QUICK_AGENT_MODEL
-    QUICK_AGENT_MODEL="${QUICK_AGENT_MODEL:-gemini-3-flash-preview}"
+    read -rp "Specialist / backup model [claude-sonnet-5]: " SPECIALIST_AGENT_MODEL
+    SPECIALIST_AGENT_MODEL="${SPECIALIST_AGENT_MODEL:-claude-sonnet-5}"
+
+    read -rp "Search sub-agent model (must be Gemini) [gemini-3.8-flash]: " SEARCH_AGENT_MODEL
+    SEARCH_AGENT_MODEL="${SEARCH_AGENT_MODEL:-gemini-3.8-flash}"
+
+    read -rp "Vision model (Gemini) [gemini-3.8-flash]: " VISION_MODEL
+    VISION_MODEL="${VISION_MODEL:-gemini-3.8-flash}"
 
     ok "Agent identity captured."
     hr
@@ -553,7 +560,11 @@ GOOGLE_CLOUD_LOCATION=global
 GOOGLE_GENAI_USE_VERTEXAI=TRUE
 
 HIGH_QUALITY_AGENT_MODEL=$HIGH_QUALITY_AGENT_MODEL
-QUICK_AGENT_MODEL=$QUICK_AGENT_MODEL
+SPECIALIST_AGENT_MODEL=$SPECIALIST_AGENT_MODEL
+SEARCH_AGENT_MODEL=$SEARCH_AGENT_MODEL
+VISION_MODEL=$VISION_MODEL
+# Anthropic API key secret (terraform SECTION 7); add the value with `gcloud secrets versions add`
+ANTHROPIC_SECRET_NAME=${BOT_ACCOUNT_ID}-anthropic-key
 
 AGENT_DISPLAY_NAME=$AGENT_DISPLAY_NAME
 BOT_ACCOUNT_ID=$BOT_ACCOUNT_ID

@@ -18,11 +18,14 @@ import os
 os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'
 
 from google.adk.agents import Agent
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps import App
 from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool  # noqa: F401
 
 from .custom_functions import get_agent_memory, update_agent_memory
 from .comites_standard import magister_instruction
+from .model_utils import high_quality_config, high_quality_model
 
 # --- (Optional) Scheduler MCP toolset ---
 # Uncomment when you've enabled the scheduler in terraform (Section 6),
@@ -161,7 +164,10 @@ STUB_INSTRUCTION = (
 # responses on messages that trigger several tool calls, the model is the first
 # thing to check.
 root_agent = Agent(
-    model=os.environ.get('HIGH_QUALITY_AGENT_MODEL', 'gemini-3.1-pro-preview'),
+    # Claude via the first-party Anthropic API (model_utils.py) — never a bare
+    # model string: the wrapper adds non-streaming, retry, and a backup model.
+    model=high_quality_model(),
+    generate_content_config=high_quality_config("high"),
     name='root_agent',
     description=(
         'A new Comites.ai agent built from the agent template. Currently '
@@ -193,4 +199,14 @@ root_agent = Agent(
         #   AgentTool(agent=your_subagent_from_custom_agents),
         #   scheduler_toolset,
     ],
+)
+
+
+# App wrapper: turns on prompt caching for the Claude root (tools + system
+# instruction + conversation prefix bill at the cache-read rate after the
+# first turn). The Agent Engine loader prefers `app` over `root_agent`.
+app = App(
+    name=(__package__ or "agent").rsplit(".", 1)[-1],
+    root_agent=root_agent,
+    context_cache_config=ContextCacheConfig(min_tokens=2048),
 )
