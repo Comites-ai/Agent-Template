@@ -133,6 +133,14 @@ Comites and The Forum work **with or without** a Magister (an optional chief-of-
 - **Contract atomicity is enforced:** standard entries' request/response formats must match `comites_standard.STANDARD_CONTRACTS` verbatim — `register_agent.py` fails the deploy on drift, and `tests/test_comites_standard.py` checks the shipped stub. Change formats in both files (plus your README) in ONE commit.
 - **Turning the gate off retracts on the next deploy:** when a redeploy publishes no inquiries (gate off, or everything pruned), `register_agent.py` deletes the previously published `inquiries` field from the Firestore doc so other agents stop discovering contracts you no longer implement. The `description` field is deliberately left in place (it may be maintained by hand in Firestore).
 
+### 14. Never leave a key with an empty value in `.env`
+
+`adk deploy agent_engine` reads the agent folder's `.env` and ships every line as an engine environment variable, and Agent Platform rejects an empty value with a 400 at deploy time — the deploy fails before the container is even built, with an error that doesn't point at the variable. If a setting is unused (memory doc, a platform token, an optional URL), delete the line instead of leaving `KEY=`. `get_started_linux.sh` no longer writes empty keys for this reason.
+
+### 15. Tools are `async def` — sync tools block every other conversation
+
+ADK 2.8 runs a synchronous tool function inline on the engine's event loop. While it waits on Sheets, Drive, Firestore, or any HTTP call, every other session on that engine instance waits too, and a slow call from one user shows up as silence for everyone. Write tools as `async def` and push blocking I/O through `asyncio.to_thread(...)` (or an async client). The memory tools in `custom_functions.py` show the pattern. The same applies to `InstructionProvider` callables: keep them async if they read anything.
+
 ## Building your agent
 
 When you're filling in actual agent behavior:

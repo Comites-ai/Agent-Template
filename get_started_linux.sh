@@ -574,8 +574,9 @@ FORUM_URL=$FORUM_URL
 ADK_BIN=$adk_bin
 ADK_PYTHON=$adk_python
 
-# Populated by Phase 12 if you wire up persistent memory.
-AGENT_MEMORY_DOC_ID=
+# AGENT_MEMORY_DOC_ID is appended by Phase 12 if you wire up persistent memory.
+# It is deliberately NOT written empty: `adk deploy` ships .env as engine env
+# vars, and Agent Platform rejects an empty value with a 400 at deploy time.
 
 GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=TRUE
 OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=TRUE
@@ -1002,7 +1003,7 @@ phase_12_memory_doc() {
     echo
 
     if ! prompt_yn "Wire up a Google Doc for persistent memory?" y; then
-        warn "Skipping memory doc setup — AGENT_MEMORY_DOC_ID will be empty."
+        warn "Skipping memory doc setup — AGENT_MEMORY_DOC_ID stays out of .env (an empty value would fail the deploy)."
         hr
         return 0
     fi
