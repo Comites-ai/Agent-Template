@@ -117,9 +117,11 @@ The template relies on managed Agent Engine sessions plus the Forum's Firestore 
 
 The bootstrap script runs once at repo setup and deletes itself. Don't try to re-run it to "regenerate" `.env` or `terraform.tfvars` — edit those files directly, or modify them via `terraform.tfvars.example` + a fresh clone.
 
-### 12. Model calls are forced to the `global` endpoint at import time — keep it there
+### 12. Models go through `model_utils.py`; Gemini calls are forced to the `global` endpoint at import time
 
-`agent.py` sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. This is deliberate and load-bearing: the Reasoning Engine deploys to a regional location (`us-central1`), but the Gemini preview models the template defaults to are only served on the `global` endpoint. The Google libraries read `GOOGLE_CLOUD_LOCATION` at import, so the override has to come before they're imported. If you move that line below the imports — or drop it — preview models start failing with `404 / NOT_FOUND` while regional models keep working, which makes it look like a model-name typo rather than an endpoint problem.
+Never pass a bare model string to `Agent(model=...)`. `model_utils.high_quality_model()` / `specialist_model()` / `search_model()` build the model behind a `BaseLlm` wrapper that (a) constructs Claude explicitly as ADK's `AnthropicLlm` on the first-party Anthropic API with the key from Secret Manager — a bare `claude-*` string would be routed by ADK's registry to its Vertex `Claude` class, which this estate has no quota for; (b) forces non-streaming completions (streaming teardown mid-turn kills turns that use MCP toolsets); (c) retries transient 429/500/503/529 errors; (d) falls back to a backup model on failure or an empty reply; and (e) builds inner models per event loop, because Agent Engine runs each request on a fresh loop and a cached async HTTP client dies on the second request. Never subclass ADK model internals — compose at the `BaseLlm` boundary. `google_search` / `url_context` sub-agents must use `search_model()` (Gemini), and direct `genai.Client()` vision calls should go through `generate_vision()` with `VISION_MODEL`. Wrap the root in `App(context_cache_config=...)` so Claude's prompt caching is on.
+
+`agent.py` still sets `os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'` as its very first statement, *above* the `google.adk` / `google.genai` imports. Claude ignores it, but the Gemini search and vision calls need it: the Reasoning Engine deploys to a regional location (`us-central1`) while the newest Gemini models are served on the `global` endpoint, and the Google libraries read `GOOGLE_CLOUD_LOCATION` at import. Move that line below the imports and Gemini calls start failing with `404 / NOT_FOUND`, which looks like a model-name typo rather than an endpoint problem.
 
 ### 13. The Magister capability suite is conditional — and must stay that way
 
@@ -130,6 +132,14 @@ Comites and The Forum work **with or without** a Magister (an optional chief-of-
 - **Prune honestly:** delete the standard entries from `inquiries.json` that don't genuinely fit your agent's domain. Abstention is encouraged; an inquiry you can't answer well is register noise. Pruning the file prunes the prompt in the same commit — `comites_standard.py` reads `inquiries.json` at runtime, which is why that file ships in the deploy bundle (it is deliberately absent from `.ae_ignore`).
 - **Contract atomicity is enforced:** standard entries' request/response formats must match `comites_standard.STANDARD_CONTRACTS` verbatim — `register_agent.py` fails the deploy on drift, and `tests/test_comites_standard.py` checks the shipped stub. Change formats in both files (plus your README) in ONE commit.
 - **Turning the gate off retracts on the next deploy:** when a redeploy publishes no inquiries (gate off, or everything pruned), `register_agent.py` deletes the previously published `inquiries` field from the Firestore doc so other agents stop discovering contracts you no longer implement. The `description` field is deliberately left in place (it may be maintained by hand in Firestore).
+
+### 14. Never leave a key with an empty value in `.env`
+
+`adk deploy agent_engine` reads the agent folder's `.env` and ships every line as an engine environment variable, and Agent Platform rejects an empty value with a 400 at deploy time — the deploy fails before the container is even built, with an error that doesn't point at the variable. If a setting is unused (memory doc, a platform token, an optional URL), delete the line instead of leaving `KEY=`. `get_started_linux.sh` no longer writes empty keys for this reason.
+
+### 15. Tools are `async def` — sync tools block every other conversation
+
+ADK 2.8 runs a synchronous tool function inline on the engine's event loop. While it waits on Sheets, Drive, Firestore, or any HTTP call, every other session on that engine instance waits too, and a slow call from one user shows up as silence for everyone. Write tools as `async def` and push blocking I/O through `asyncio.to_thread(...)` (or an async client). The memory tools in `custom_functions.py` show the pattern. The same applies to `InstructionProvider` callables: keep them async if they read anything.
 
 ## Building your agent
 

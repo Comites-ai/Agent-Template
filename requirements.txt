@@ -24,9 +24,13 @@ google-genai
 # independently), so engine logs still work. Re-enable cloud tracing once the
 # GCP OTel exporters support the newer SDK.
 #
-# google-adk is left unpinned (latest) for a quickstart. Trade-off: a transitive
-# dep can change under you between deploys — if a deploy suddenly breaks with no
-# code change, suspect a dependency bump first and check the engine build log for
-# versions.
-google-adk[a2a]
-mcp
+# Pinned: the deployed engine must run the ADK this template was verified
+# against (2.8.0 ships AnthropicLlm with client=, effort, and prompt caching).
+# An unpinned ADK is how one estate agent's Claude path broke in June 2026.
+google-adk[a2a]==2.8.0
+# Claude via the first-party Anthropic API (model_utils.py). 1.x needs
+# Python >= 3.10; the engine runtime is 3.11.
+anthropic==1.4.0
+# Pinned <2: mcp 2.0 removed mcp.shared.session and crashes the deployed engine
+# at module load (took down two estate agents before the pin).
+mcp>=1.5,<2
