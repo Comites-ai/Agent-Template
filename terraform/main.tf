@@ -373,11 +373,11 @@ resource "google_storage_bucket_iam_member" "engine_inbound_files_reader" {
 #   done
 locals {
   forum_runtime_roles_for_agent_sa = toset([
-    "roles/aiplatform.user",         # invoke Vertex AI APIs at runtime
+    "roles/aiplatform.user",                   # invoke Vertex AI APIs at runtime
     "roles/serviceusage.serviceUsageConsumer", # the aiplatform initializer resolves the Forum project by number at startup; without this every engine logs a 403 USER_PROJECT_DENIED traceback (noise that masks real failures)
-    "roles/logging.logWriter",       # emit stdout/stderr to Cloud Logging
-    "roles/monitoring.metricWriter", # emit container metrics
-    "roles/cloudtrace.agent",        # emit traces. NOTE: --trace_to_cloud was removed from deploy_and_update.sh (commit b5adf67) because it triggers a metadata-proxy scope bug with cross-project SAs. We keep this role granted so re-enabling tracing later is a one-line change; remove if you've decided you'll never use it.
+    "roles/logging.logWriter",                 # emit stdout/stderr to Cloud Logging
+    "roles/monitoring.metricWriter",           # emit container metrics
+    "roles/cloudtrace.agent",                  # emit traces. NOTE: --trace_to_cloud was removed from deploy_and_update.sh (commit b5adf67) because it triggers a metadata-proxy scope bug with cross-project SAs. We keep this role granted so re-enabling tracing later is a one-line change; remove if you've decided you'll never use it.
   ])
 }
 
