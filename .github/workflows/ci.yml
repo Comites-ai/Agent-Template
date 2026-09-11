@@ -54,6 +54,7 @@ jobs:
             __init__.py \
             custom_functions.py \
             custom_agents.py \
+            model_utils.py \
             secret_utilities.py \
             storage_utilities.py \
             docs_utilities.py \
