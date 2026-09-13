@@ -234,7 +234,7 @@ If the doc still appears blank, possible causes:
     --project=<FORUM_PROJECT_ID> --limit=20
   ```
   A `PERMISSION_DENIED` from `docs.googleapis.com` confirms the doc isn't shared with the right SA.
-- The model returned text without calling tools. Bump `HIGH_QUALITY_AGENT_MODEL` in `.env` to `gemini-2.5-pro` and redeploy — flash models occasionally skip required tool calls when the prompt is long.
+- The model returned text without calling tools. Check that `HIGH_QUALITY_AGENT_MODEL` in `.env` is still the fleet default (`claude-opus-5`) and redeploy — smaller models occasionally skip required tool calls when the prompt is long.
 
 ### Step 7c: Send a second message and verify the count updates
 
@@ -244,7 +244,7 @@ If the doc still appears blank, possible causes:
 
 The Google Doc should now read `Total interactions: 2` and have both messages listed under "Recent messages." That confirms the read-modify-write cycle is working, not just a one-shot write.
 
-If all three appear, the template works end-to-end. ✅ If the response is missing one of them, the model is probably ignoring parts of the prompt — try a higher-quality model in `HIGH_QUALITY_AGENT_MODEL` (`gemini-2.5-pro` is a safe choice) and redeploy.
+If all three appear, the template works end-to-end. ✅ If the response is missing one of them, the model is probably ignoring parts of the prompt — make sure `HIGH_QUALITY_AGENT_MODEL` is the fleet default (`claude-opus-5`) and redeploy.
 
 ### Step 8: Test a redeploy
 

@@ -12,17 +12,21 @@ See `README.md` ("Next steps") and `AGENTS.md` for guidance.
 import os
 
 # Force model API calls to the `global` endpoint so preview models (e.g.
-# `gemini-3.1-pro-preview`) are accessible even when the Agent Engine itself
+# the Gemini search and vision calls) are accessible even when the Agent Engine itself
 # is deployed in a regional location like us-central1. Safe to leave on for
 # non-preview models too.
 os.environ['GOOGLE_CLOUD_LOCATION'] = 'global'
 
 from google.adk.agents import Agent
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps import App
+from google.adk.apps.app import EventsCompactionConfig
 from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool  # noqa: F401
 
 from .custom_functions import get_agent_memory, update_agent_memory
 from .comites_standard import magister_instruction
+from .model_utils import high_quality_config, high_quality_model
 
 # --- (Optional) Scheduler MCP toolset ---
 # Uncomment when you've enabled the scheduler in terraform (Section 6),
@@ -161,7 +165,10 @@ STUB_INSTRUCTION = (
 # responses on messages that trigger several tool calls, the model is the first
 # thing to check.
 root_agent = Agent(
-    model=os.environ.get('HIGH_QUALITY_AGENT_MODEL', 'gemini-3.1-pro-preview'),
+    # Claude via the first-party Anthropic API (model_utils.py) — never a bare
+    # model string: the wrapper adds non-streaming, retry, and a backup model.
+    model=high_quality_model(),
+    generate_content_config=high_quality_config("high"),
     name='root_agent',
     description=(
         'A new Comites.ai agent built from the agent template. Currently '
@@ -193,4 +200,25 @@ root_agent = Agent(
         #   AgentTool(agent=your_subagent_from_custom_agents),
         #   scheduler_toolset,
     ],
+)
+
+
+# App wrapper: turns on prompt caching for the Claude root (tools + system
+# instruction + conversation prefix bill at the cache-read rate after the
+# first turn). The Agent Engine loader prefers `app` over `root_agent`.
+app = App(
+    name=(__package__ or "agent").rsplit(".", 1)[-1],
+    root_agent=root_agent,
+    # Event compaction: fold older turns into a summary so the per-turn session
+    # read (and the event history replayed to the model) stops growing all day.
+    # Sliding window every 10 user turns keeping 2 for continuity, plus a
+    # token-based trigger for turns whose tool output is huge (a cellar or
+    # inventory dump). Fewer, smaller Sessions API reads is the point.
+    events_compaction_config=EventsCompactionConfig(
+        compaction_interval=10,
+        overlap_size=2,
+        token_threshold=60000,
+        event_retention_size=10,
+    ),
+    context_cache_config=ContextCacheConfig(min_tokens=2048),
 )

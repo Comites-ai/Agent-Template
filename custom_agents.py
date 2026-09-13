@@ -10,10 +10,12 @@ Pattern:
 
     from google.adk.agents import Agent
     from google.adk.tools import google_search
+
+    from .model_utils import search_model
     import os
 
     google_search_agent = Agent(
-        model=os.environ.get('QUICK_AGENT_MODEL', 'gemini-3-flash-preview'),
+        model=search_model(),  # from .model_utils — Gemini, because google_search needs it
         name='google_search_agent',
         description='Performs Google searches and returns relevant results.',
         instruction='Search the web for the user query and return the most relevant results.',

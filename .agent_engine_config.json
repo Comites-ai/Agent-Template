@@ -1,3 +1,6 @@
 {
-  "service_account": "{{BOT_ACCOUNT_ID}}@{{AGENT_PROJECT_ID}}.iam.gserviceaccount.com"
+  "service_account": "{{BOT_ACCOUNT_ID}}@{{AGENT_PROJECT_ID}}.iam.gserviceaccount.com",
+  "extra_packages": [
+    "inquiries.json"
+  ]
 }
